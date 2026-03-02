@@ -24,7 +24,7 @@ interface IRouter {
 
 /**
  * @title SubscriptionKeeper
- * @notice Permissionless renewal collector for Polyclaw subscriptions.
+ * @notice Permissionless renewal collector for Nopipe subscriptions.
  *
  * Requirements implemented:
  * - collectFor(address) returns bool and never intentionally reverts on operational failures

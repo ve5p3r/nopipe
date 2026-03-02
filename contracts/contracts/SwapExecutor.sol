@@ -24,7 +24,7 @@ interface IRouter {
 
 /**
  * @title SwapExecutor
- * @notice Non-custodial swap execution layer for Polyclaw on Base.
+ * @notice Non-custodial swap execution layer for Nopipe on Base.
  *
  * - Router allowlist enforced at execution time
  * - 0.1% protocol fee charged on input before routing

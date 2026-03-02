@@ -23,8 +23,8 @@ describe("OperatorNFT", function () {
 
   // ── Constants ──────────────────────────────────────────────────────────
   it("has correct name and symbol", async function () {
-    expect(await nft.name()).to.equal("Polyclaw Operator");
-    expect(await nft.symbol()).to.equal("PCOP");
+    expect(await nft.name()).to.equal("Nopipe Operator");
+    expect(await nft.symbol()).to.equal("NPOP");
   });
 
   it("has correct supply caps", async function () {

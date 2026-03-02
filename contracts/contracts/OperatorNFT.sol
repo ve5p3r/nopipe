@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/utils/Strings.sol";
 
 /**
  * @title OperatorNFT
- * @notice Polyclaw operator license NFT.
+ * @notice Nopipe operator license NFT.
  *
  * Tiers:
  *   1 = Free
@@ -56,7 +56,7 @@ contract OperatorNFT is ERC721, Ownable {
 
     event Minted(address indexed to, uint256 indexed tokenId, uint8 tier, bool soulbound);
 
-    constructor() ERC721("Polyclaw Operator", "PCOP") Ownable(msg.sender) {}
+    constructor() ERC721("Nopipe Operator", "NPOP") Ownable(msg.sender) {}
 
     // ─────────────────────────────────────────────────────────────────────────
     // Minting
@@ -139,7 +139,7 @@ contract OperatorNFT is ERC721, Ownable {
 
         uint8 tier = _tier[tokenId];
         string memory json = string.concat(
-            '{"name":"Polyclaw Operator #', tokenId.toString(),
+            '{"name":"Nopipe Operator #', tokenId.toString(),
             '","tier":', uint256(tier).toString(),
             ',"attributes":[{"trait_type":"Tier","value":"', _tierName(tier), '"}]}'
         );
