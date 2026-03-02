@@ -9,7 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 use tracing::info;
 
-use crate::plugins::cluster::security::verify_eip191_signature;
+use crate::security::verify_eip191_signature;
 
 #[derive(Clone)]
 pub struct GauntletConfig {

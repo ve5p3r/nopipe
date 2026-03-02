@@ -7,7 +7,9 @@
     "test": "test"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "deploy:sepolia": "hardhat run scripts/deploy-sepolia.ts --network base-sepolia",
+    "deploy:mainnet": "hardhat run scripts/deploy-sepolia.ts --network base-mainnet"
   },
   "keywords": [],
   "author": "",
