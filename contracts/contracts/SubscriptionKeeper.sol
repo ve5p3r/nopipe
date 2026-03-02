@@ -2,6 +2,8 @@
 pragma solidity ^0.8.28;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
@@ -31,7 +33,7 @@ interface IRouter {
  * - getSubscriptionStatus(agent) view helper
  * - Emits SubRenewed(agent, nextDue, amountCharged)
  */
-contract SubscriptionKeeper is Ownable {
+contract SubscriptionKeeper is Ownable, Pausable, ReentrancyGuard {
     // Base WETH
     address public constant WPEG = 0x4200000000000000000000000000000000000006;
 
@@ -186,7 +188,7 @@ contract SubscriptionKeeper is Ownable {
      * @notice Permissionless renewal attempt.
      * @return success true if renewal completed, false otherwise.
      */
-    function collectFor(address agent) external returns (bool success) {
+    function collectFor(address agent) external nonReentrant whenNotPaused returns (bool success) {
         AgentSub storage sub = _subs[agent];
 
         if (sub.agent == address(0)) return _fail(agent, "No sub");
@@ -316,6 +318,9 @@ contract SubscriptionKeeper is Ownable {
         emit SubRenewed(agent, sub.nextRenewal, amountRequired);
         return true;
     }
+
+    function pause() external onlyOwner { _pause(); }
+    function unpause() external onlyOwner { _unpause(); }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Views
