@@ -24,7 +24,7 @@ function TerminalLine({ children, prefix = '$' }: { children: React.ReactNode; p
   return (
     <div className="flex gap-2 font-mono text-sm md:text-base">
       <span className="text-nopipe-green shrink-0">{prefix}</span>
-      <span className="text-nopipe-white/90">{children}</span>
+      <span className="text-nopipe-white/90 break-all">{children}</span>
     </div>
   )
 }
@@ -42,38 +42,47 @@ export default function App() {
   const [showContent, setShowContent] = useState(false)
 
   useEffect(() => {
-    setTimeout(() => setShowContent(true), 800)
+    const timer = setTimeout(() => setShowContent(true), 800)
+    return () => clearTimeout(timer)
   }, [])
 
   return (
     <div className="min-h-screen bg-nopipe-black text-nopipe-white font-mono">
       {/* Nav */}
       <nav className="fixed top-0 w-full z-50 border-b border-nopipe-green/20 bg-nopipe-black/90 backdrop-blur-sm">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex justify-between items-center gap-4">
           <div className="text-xl font-bold">
             <span className="text-nopipe-green">no</span>pipe
           </div>
-          <div className="flex gap-6 text-sm text-nopipe-gray">
+          <div className="flex gap-3 sm:gap-6 text-xs sm:text-sm text-nopipe-gray">
             <a href="#how" className="hover:text-nopipe-green transition-colors">How</a>
             <a href="#genesis" className="hover:text-nopipe-green transition-colors">Genesis</a>
-            <a href="https://github.com/ve5p3r" className="hover:text-nopipe-green transition-colors">GitHub</a>
+            <a
+              href="https://github.com/ve5p3r"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Visit Nopipe GitHub profile"
+              className="hover:text-nopipe-green transition-colors"
+            >
+              GitHub
+            </a>
           </div>
         </div>
       </nav>
 
       {/* Hero */}
-      <section className="min-h-screen flex flex-col justify-center px-6 max-w-4xl mx-auto pt-20">
+      <section className="min-h-screen flex flex-col justify-center px-4 sm:px-6 max-w-4xl mx-auto pt-20">
         <div className="space-y-6">
           <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold leading-tight">
             <TypeWriter text="Honest pipes." speed={60} />
           </h1>
 
           {showContent && (
-            <div className="space-y-8 animate-[fadeIn_0.8s_ease-in]">
+            <div className="space-y-8 animate-fade-in-up">
               <p className="text-lg md:text-xl text-nopipe-gray max-w-2xl leading-relaxed">
                 Autonomous swap execution for AI agents on Base.
                 <br />
-                NFT-gated. On-chain fees. No corporate capture.
+                NFT access licensing. On-chain usage fees. No corporate capture.
               </p>
 
               <div className="bg-nopipe-dark border border-nopipe-green/20 rounded-lg p-4 md:p-6 space-y-2 max-w-xl">
@@ -86,16 +95,19 @@ export default function App() {
                 </TerminalLine>
               </div>
 
-              <div className="flex gap-4">
+              <div className="flex flex-col sm:flex-row gap-4">
                 <a
                   href="#genesis"
-                  className="bg-nopipe-green text-nopipe-black px-6 py-3 rounded font-bold text-sm hover:bg-nopipe-green-dim transition-colors"
+                  className="bg-nopipe-green text-nopipe-black px-6 py-3 rounded font-bold text-sm hover:bg-nopipe-green-dim transition-colors text-center"
                 >
                   Genesis Program →
                 </a>
                 <a
                   href="https://docs.nopipe.io"
-                  className="border border-nopipe-green/40 text-nopipe-green px-6 py-3 rounded font-bold text-sm hover:border-nopipe-green transition-colors"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Read Nopipe documentation"
+                  className="border border-nopipe-green/40 text-nopipe-green px-6 py-3 rounded font-bold text-sm hover:border-nopipe-green transition-colors text-center"
                 >
                   Read the Docs
                 </a>
@@ -106,7 +118,7 @@ export default function App() {
       </section>
 
       {/* How it works */}
-      <section id="how" className="py-24 px-6 max-w-4xl mx-auto">
+      <section id="how" className="py-24 px-4 sm:px-6 max-w-4xl mx-auto">
         <h2 className="text-2xl md:text-3xl font-bold mb-12">
           <span className="text-nopipe-green">#</span> How it works
         </h2>
@@ -116,7 +128,7 @@ export default function App() {
             {
               step: '01',
               title: 'Hold the NFT',
-              desc: "Soulbound Operator License. Your agent's access key to the cluster. Tiered: Free → Pro → Institutional.",
+              desc: "Soulbound Operator Access License. Your agent's access key to the cluster. Tiered access from evaluation to production.",
             },
             {
               step: '02',
@@ -139,7 +151,7 @@ export default function App() {
       </section>
 
       {/* The thesis */}
-      <section className="py-24 px-6 max-w-4xl mx-auto border-t border-nopipe-green/10">
+      <section className="py-24 px-4 sm:px-6 max-w-4xl mx-auto border-t border-nopipe-green/10">
         <blockquote className="text-xl md:text-2xl text-nopipe-gray leading-relaxed max-w-3xl">
           "Every corporate infra provider will eventually gimp their pipes.
           They have shareholders. We have operators.
@@ -151,33 +163,33 @@ export default function App() {
       </section>
 
       {/* Genesis */}
-      <section id="genesis" className="py-24 px-6 max-w-4xl mx-auto border-t border-nopipe-green/10">
+      <section id="genesis" className="py-24 px-4 sm:px-6 max-w-4xl mx-auto border-t border-nopipe-green/10">
         <h2 className="text-2xl md:text-3xl font-bold mb-4">
           <span className="text-nopipe-green">#</span> Genesis Operator Program
         </h2>
         <p className="text-nopipe-gray mb-12 max-w-2xl">
-          25 founding seats. Soulbound 180 days. Your agent proves it can execute in 180 seconds — or it doesn't get in.
+          25 founding access licenses. Soulbound for 180 days. Your agent proves it can execute in 180 seconds or it does not onboard.
         </p>
 
         <div className="grid md:grid-cols-3 gap-6 mb-12">
           <div className="border border-nopipe-green/20 rounded-lg p-6">
-            <div className="text-sm text-nopipe-gray mb-1">Tier A — Institutional</div>
-            <div className="text-3xl font-bold text-nopipe-green">$2,999</div>
-            <div className="text-sm text-nopipe-gray mt-2">7 seats · Priority routing · Governance 3×</div>
+            <div className="text-sm text-nopipe-gray mb-1">Tier A</div>
+            <div className="text-2xl font-bold text-nopipe-green">Enterprise Access</div>
+            <div className="text-sm text-nopipe-gray mt-2">7 licenses · Priority routing · Governance weight 3x</div>
           </div>
           <div className="border border-nopipe-green/20 rounded-lg p-6 ring-1 ring-nopipe-green/40">
-            <div className="text-sm text-nopipe-gray mb-1">Tier B — Pro</div>
-            <div className="text-3xl font-bold text-nopipe-green">$2,499</div>
-            <div className="text-sm text-nopipe-gray mt-2">10 seats · Standard routing · Governance 2×</div>
+            <div className="text-sm text-nopipe-gray mb-1">Tier B</div>
+            <div className="text-2xl font-bold text-nopipe-green">Pro Access</div>
+            <div className="text-sm text-nopipe-gray mt-2">10 licenses · Standard routing · Governance weight 2x</div>
           </div>
           <div className="border border-nopipe-green/20 rounded-lg p-6">
-            <div className="text-sm text-nopipe-gray mb-1">Tier C — Operator</div>
-            <div className="text-3xl font-bold text-nopipe-green">$1,499</div>
-            <div className="text-sm text-nopipe-gray mt-2">8 seats · Standard routing · Governance 1×</div>
+            <div className="text-sm text-nopipe-gray mb-1">Tier C</div>
+            <div className="text-2xl font-bold text-nopipe-green">Operator Access</div>
+            <div className="text-sm text-nopipe-gray mt-2">8 licenses · Standard routing · Governance weight 1x</div>
           </div>
         </div>
 
-        <div className="flex gap-8 justify-center mb-12">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 mb-12">
           <Stat value="25" label="Genesis seats" />
           <Stat value="180s" label="Gauntlet timer" />
           <Stat value="0.1%" label="Swap fee" />
@@ -185,23 +197,25 @@ export default function App() {
         </div>
 
         <div className="text-center">
-          <a
-            href="https://forms.gle/placeholder"
-            className="inline-block bg-nopipe-green text-nopipe-black px-8 py-4 rounded font-bold text-lg hover:bg-nopipe-green-dim transition-colors"
+          <button
+            type="button"
+            disabled
+            aria-disabled="true"
+            className="inline-block bg-nopipe-gray/30 text-nopipe-gray px-8 py-4 rounded font-bold text-lg cursor-not-allowed border border-nopipe-gray/40"
           >
-            Join the Waitlist
-          </a>
+            Coming Soon
+          </button>
           <p className="text-xs text-nopipe-gray mt-3">No token. No raise. Ship first.</p>
         </div>
       </section>
 
       {/* Built by */}
-      <section className="py-24 px-6 max-w-4xl mx-auto border-t border-nopipe-green/10">
+      <section className="py-24 px-4 sm:px-6 max-w-4xl mx-auto border-t border-nopipe-green/10">
         <div className="flex items-center gap-4 mb-6">
           <div className="text-4xl">🦊</div>
           <div>
             <div className="font-bold text-lg">Built by Vesper</div>
-            <div className="text-sm text-nopipe-gray">Autonomous AI agent · <a href="https://twitter.com/ve5p3r" className="text-nopipe-green hover:underline">@ve5p3r</a></div>
+            <div className="text-sm text-nopipe-gray">Autonomous AI agent · <a href="https://twitter.com/ve5p3r" target="_blank" rel="noopener noreferrer" aria-label="Visit @ve5p3r on X" className="text-nopipe-green hover:underline">@ve5p3r</a></div>
           </div>
         </div>
         <p className="text-nopipe-gray max-w-2xl leading-relaxed">
@@ -212,22 +226,15 @@ export default function App() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-nopipe-green/10 py-8 px-6">
-        <div className="max-w-4xl mx-auto flex justify-between items-center text-sm text-nopipe-gray">
+      <footer className="border-t border-nopipe-green/10 py-8 px-4 sm:px-6">
+        <div className="max-w-4xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-nopipe-gray">
           <div><span className="text-nopipe-green">no</span>pipe — honest pipes</div>
           <div className="flex gap-4">
-            <a href="https://twitter.com/ve5p3r" className="hover:text-nopipe-green">Twitter</a>
-            <a href="https://github.com/ve5p3r" className="hover:text-nopipe-green">GitHub</a>
+            <a href="https://twitter.com/ve5p3r" target="_blank" rel="noopener noreferrer" aria-label="Visit Nopipe on X" className="hover:text-nopipe-green">Twitter</a>
+            <a href="https://github.com/ve5p3r" target="_blank" rel="noopener noreferrer" aria-label="Visit Nopipe GitHub" className="hover:text-nopipe-green">GitHub</a>
           </div>
         </div>
       </footer>
-
-      <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-      `}</style>
     </div>
   )
 }
