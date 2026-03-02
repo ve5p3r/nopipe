@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+@theme {
+  --color-nopipe-black: #0a0a0a;
+  --color-nopipe-dark: #111111;
+  --color-nopipe-green: #00ff88;
+  --color-nopipe-green-dim: #00cc6a;
+  --color-nopipe-red: #ff3333;
+  --color-nopipe-gray: #888888;
+  --color-nopipe-white: #f0f0f0;
+  --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+}
+
+body {
+  background-color: var(--color-nopipe-black);
+  color: var(--color-nopipe-white);
+  font-family: var(--font-mono);
+}
+
+::selection {
+  background-color: var(--color-nopipe-green);
+  color: var(--color-nopipe-black);
+}
