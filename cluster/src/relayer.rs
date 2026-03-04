@@ -6,8 +6,12 @@ use alloy::signers::local::PrivateKeySigner;
 use anyhow::{anyhow, Result};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 use tracing::{error, info, warn};
+
+// Pre-computed gas limit for tradeFor() — skips eth_estimateGas on every call.
+// Measured on Base mainnet; 20% headroom over typical ~200k gas.
+const TRADE_FOR_GAS_LIMIT: u64 = 250_000;
 
 pub struct RelayerConfig {
     pub rpc_http: String,
@@ -44,22 +48,38 @@ pub struct RelayerService {
     config: RelayerConfig,
     signer: PrivateKeySigner,
     health: Arc<RwLock<RelayerHealth>>,
+    // In-memory nonce — avoids eth_getTransactionCount per tx
+    nonce: Arc<Mutex<u64>>,
 }
 
 impl RelayerService {
     pub async fn new(config: RelayerConfig) -> Result<Self> {
         let signer: PrivateKeySigner = config.relayer_private_key.parse()
             .map_err(|e| anyhow!("Invalid relayer private key: {e}"))?;
-        let provider = ProviderBuilder::new().connect_http(config.rpc_http.parse().unwrap());
+
+        let provider = ProviderBuilder::new()
+            .connect_http(config.rpc_http.parse().unwrap());
+
         let balance = provider.get_balance(signer.address()).await?;
         info!("Relayer {} balance: {} wei", signer.address(), balance);
+
+        // Fetch nonce once at startup; track in-memory from here
+        let nonce = provider.get_transaction_count(signer.address()).await?;
+        info!("Relayer nonce at boot: {nonce}");
+
         let health = Arc::new(RwLock::new(RelayerHealth {
             balance_wei: balance,
             threshold_wei: config.min_balance_wei,
             last_refill_tx: None,
             last_error: None,
         }));
-        Ok(Self { config, signer, health })
+
+        Ok(Self {
+            nonce: Arc::new(Mutex::new(nonce)),
+            config,
+            signer,
+            health,
+        })
     }
 
     fn encode_trade_for_call(&self, req: &TradeForRequest) -> Result<Bytes> {
@@ -69,17 +89,13 @@ impl RelayerService {
         )[..4];
         let mut out = selector.to_vec();
 
-        // amountIn uint256
-        let mut b = [0u8; 32];
         let b = req.amount_in.to_be_bytes::<32>();
         out.extend_from_slice(&b);
 
-        // recipient address
         let mut b = [0u8; 32];
         b[12..].copy_from_slice(req.recipient.as_slice());
         out.extend_from_slice(&b);
 
-        // router address
         let mut b = [0u8; 32];
         b[12..].copy_from_slice(req.router.as_slice());
         out.extend_from_slice(&b);
@@ -89,12 +105,10 @@ impl RelayerService {
         b[31] = 160u8;
         out.extend_from_slice(&b);
 
-        // slippageBps uint32
         let mut b = [0u8; 32];
         b[28..].copy_from_slice(&req.slippage_bps.to_be_bytes());
         out.extend_from_slice(&b);
 
-        // path array length
         let mut b = [0u8; 32];
         b[31] = req.path.len() as u8;
         out.extend_from_slice(&b);
@@ -114,6 +128,15 @@ impl RelayerService {
         if req.amount_in.is_zero() { return Err(anyhow!("amountIn cannot be zero")); }
 
         let calldata = self.encode_trade_for_call(&req)?;
+
+        // Grab nonce from in-memory store — no RPC round-trip
+        let nonce = {
+            let mut n = self.nonce.lock().await;
+            let current = *n;
+            *n += 1;
+            current
+        };
+
         let wallet = EthereumWallet::from(self.signer.clone());
         let provider = ProviderBuilder::new()
             .wallet(wallet)
@@ -121,16 +144,30 @@ impl RelayerService {
 
         let tx = TransactionRequest::default()
             .to(self.config.swap_executor)
-            .input(calldata.into());
+            .input(calldata.into())
+            .nonce(nonce)
+            .gas_limit(TRADE_FOR_GAS_LIMIT); // Pre-set — skips eth_estimateGas
 
+        let t0 = Instant::now();
         let pending = provider.send_transaction(tx).await
             .map_err(|e| anyhow!("Submit failed: {e}"))?;
 
-        let nonce = provider.get_transaction_count(self.signer.address()).await.unwrap_or(0);
         let tx_hash = *pending.tx_hash();
-        info!("Submitted tradeFor: {tx_hash}");
+        info!("submit_trade_for: {tx_hash} nonce={nonce} elapsed={}ms",
+            t0.elapsed().as_millis());
 
         Ok(SubmittedTx { tx_hash, nonce, submitted_at: Instant::now() })
+    }
+
+    /// Resync nonce from chain — call on nonce collision errors to recover
+    pub async fn resync_nonce(&self) -> Result<()> {
+        let provider = ProviderBuilder::new()
+            .connect_http(self.config.rpc_http.parse().unwrap());
+        let on_chain = provider.get_transaction_count(self.signer.address()).await?;
+        let mut n = self.nonce.lock().await;
+        *n = on_chain;
+        info!("Nonce resynced from chain: {on_chain}");
+        Ok(())
     }
 
     pub async fn wait_for_receipt(&self, tx_hash: B256, timeout: Duration) -> Result<TransactionReceipt> {
