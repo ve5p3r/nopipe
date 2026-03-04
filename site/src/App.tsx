@@ -86,7 +86,7 @@ export default function App() {
 
           {/* Stats bar */}
           <div className="border border-nopipe-green/20 bg-nopipe-dark rounded-lg px-4 py-3 max-w-3xl">
-            <div className="text-[10px] text-nopipe-gray uppercase tracking-widest mb-2">live · us-east-1</div>
+            <div className="text-[10px] text-nopipe-gray uppercase tracking-widest mb-2">live · base mainnet</div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs md:text-sm">
               <div><div className="text-nopipe-green font-bold">~90ms</div><div className="text-nopipe-gray">tx submitted</div></div>
               <div><div className="text-nopipe-green font-bold">200ms</div><div className="text-nopipe-gray">Flashblocks preconfirm</div></div>

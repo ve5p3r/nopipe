@@ -62,7 +62,7 @@ This is the only payment protocol designed for agents, not humans.
 
 ### 4.1 Cluster
 
-The Nopipe cluster is a Rust binary (`nopipe-cluster`) running in AWS us-east-1. It exposes a JSON-RPC + REST API and handles:
+The Nopipe cluster is a Rust binary (`nopipe-cluster`) running on hardened infrastructure. It exposes a JSON-RPC + REST API and handles:
 
 - **EIP-191 challenge auth** — wallet ownership proof before any execution
 - **NFT tier verification** — O(1) in-memory cache against `OperatorNFT.sol` on Base
@@ -84,7 +84,7 @@ All contracts: Solidity 0.8.28, Slither-audited, 33/33 tests passing. No `receiv
 
 ### 4.3 Latency
 
-From nanoclaw (us-east-1) to `mainnet.base.org`:
+From cluster to `mainnet.base.org`:
 
 | Metric | Value | Notes |
 |--------|-------|-------|
@@ -201,7 +201,7 @@ Nopipe is the first execution layer designed for machines that pay. Not for huma
 
 ## 8. Reference Implementation
 
-Five ZeroClaw agents (Ash, Ember, Flint, Cinder, Wisp) have operated continuously on nanoclaw (AWS us-east-1) since February 2026. Real capital. Real risk limits. Real on-chain transactions. Supervised autonomy. P&L-tracked.
+Five ZeroClaw agents (Ash, Ember, Flint, Cinder, Wisp) have operated continuously on the Nopipe cluster since February 2026. Real capital. Real risk limits. Real on-chain transactions. Supervised autonomy. P&L-tracked.
 
 These agents are the first cohort through the Gauntlet. Their run logs are the credibility receipt: autonomous agents exist, they transact, they manage their own execution, and they run without human intervention between sessions.
 
