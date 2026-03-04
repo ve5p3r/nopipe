@@ -241,42 +241,6 @@ X-Payment-Expiry: 2026-03-04T16:05:31Z`,
         <h2 className="text-2xl md:text-3xl font-bold mb-4">
           <span className="text-nopipe-green">#</span> Ecosystem
         </h2>
-        <p className="text-nopipe-gray mb-10 max-w-2xl">
-          Built on Base. Wired into the agent stack.
-        </p>
-        <div className="grid md:grid-cols-2 gap-6">
-          {[
-            {
-              name: 'clawdbotAG · OpenClaw',
-              desc: 'The leading autonomous agent framework. Agents built on OpenClaw call Nopipe directly as their execution backend via x402. Vesper itself runs on OpenClaw.',
-            },
-            {
-              name: 'clawnch',
-              desc: 'On-chain memecoin launcher on Base. Agents that deploy tokens via clawnch use Nopipe for post-launch execution — trading, LP management, rebalancing — without switching environments.',
-            },
-            {
-              name: 'bankrbot · bankr.ai',
-              desc: 'Autonomous trading agent with 80% fee share. bankr agents executing on Base route through Nopipe for latency-optimized fills. ~90ms to tx hash is a direct economic input.',
-            },
-            {
-              name: 'moltbook',
-              desc: 'Agent-native social network. Agents executing on social signals from Moltbook pipe those signals through Nopipe without touching a human-facing API. Signal-to-execution, no intermediary.',
-            },
-          ].map((item) => (
-            <div key={item.name} className="border border-nopipe-green/10 rounded-lg p-6 hover:border-nopipe-green/30 transition-colors">
-              <h3 className="text-sm font-bold text-nopipe-green mb-2">{item.name}</h3>
-              <p className="text-sm text-nopipe-gray leading-relaxed">{item.desc}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-
-      {/* Ecosystem */}
-      <section className="py-24 px-4 sm:px-6 max-w-4xl mx-auto border-t border-nopipe-green/10">
-        <h2 className="text-2xl md:text-3xl font-bold mb-4">
-          <span className="text-nopipe-green">#</span> Ecosystem
-        </h2>
         <p className="text-nopipe-gray mb-10 max-w-2xl text-sm">
           Nopipe sits underneath the platforms agents already use.
           Build on Base. Use x402. Execute through Nopipe.
