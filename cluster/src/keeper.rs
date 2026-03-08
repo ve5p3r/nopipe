@@ -1,11 +1,11 @@
 use alloy::primitives::{Address, Bytes};
 use alloy::providers::{Provider, ProviderBuilder};
 use alloy::rpc::types::{Filter, TransactionRequest};
-use dashmap::{DashMap, DashSet};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
-use std::time::Duration;
 use anyhow::Result;
+use dashmap::{DashMap, DashSet};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
 use tracing::{error, info, warn};
 
 pub struct KeeperConfig {
@@ -51,7 +51,10 @@ impl KeeperService {
     pub async fn bootstrap_subscribers(&self) -> Result<()> {
         let provider = ProviderBuilder::new().connect_http(self.config.rpc_http.parse().unwrap());
         let latest = provider.get_block_number().await?;
-        let from = self.config.start_block.unwrap_or(latest.saturating_sub(50_000));
+        let from = self
+            .config
+            .start_block
+            .unwrap_or(latest.saturating_sub(50_000));
         self.sync_subscriber_events(from, latest).await?;
         info!("Keeper bootstrapped {} subscribers", self.subscribers.len());
         Ok(())
@@ -82,7 +85,10 @@ impl KeeperService {
     fn mark_failure(&self, agent: Address, reason: String) {
         let mut count = self.failure_counts.entry(agent).or_insert(0);
         *count += 1;
-        warn!("collectFor({agent}) failed (#{num}): {reason}", num = *count);
+        warn!(
+            "collectFor({agent}) failed (#{num}): {reason}",
+            num = *count
+        );
     }
 
     fn encode_collect_for(agent: Address) -> Bytes {
@@ -100,7 +106,10 @@ impl KeeperService {
             .to(self.config.subscription_keeper)
             .input(Self::encode_collect_for(agent).into());
         match provider.call(tx).await {
-            Ok(_) => { info!("collectFor({agent}) OK"); Ok(true) }
+            Ok(_) => {
+                info!("collectFor({agent}) OK");
+                Ok(true)
+            }
             Err(e) => {
                 self.mark_failure(agent, e.to_string());
                 Ok(false)
@@ -110,19 +119,39 @@ impl KeeperService {
 
     pub async fn run_cycle(&self) -> Result<KeeperCycleReport> {
         let agents: Vec<Address> = self.subscribers.iter().map(|a| *a).collect();
-        let mut report = KeeperCycleReport { attempted: 0, succeeded: 0, failed: 0 };
+        let mut report = KeeperCycleReport {
+            attempted: 0,
+            succeeded: 0,
+            failed: 0,
+        };
         for agent in agents {
             report.attempted += 1;
             match self.collect_for_agent(agent).await {
-                Ok(true) => { report.succeeded += 1; self.consecutive_failures.store(0, Ordering::Relaxed); }
-                Ok(false) => { report.failed += 1; self.consecutive_failures.fetch_add(1, Ordering::Relaxed); }
-                Err(e) => { report.failed += 1; error!("Keeper RPC error for {agent}: {e}"); self.consecutive_failures.fetch_add(1, Ordering::Relaxed); }
+                Ok(true) => {
+                    report.succeeded += 1;
+                    self.consecutive_failures.store(0, Ordering::Relaxed);
+                }
+                Ok(false) => {
+                    report.failed += 1;
+                    self.consecutive_failures.fetch_add(1, Ordering::Relaxed);
+                }
+                Err(e) => {
+                    report.failed += 1;
+                    error!("Keeper RPC error for {agent}: {e}");
+                    self.consecutive_failures.fetch_add(1, Ordering::Relaxed);
+                }
             }
         }
-        let block = ProviderBuilder::new().connect_http(self.config.rpc_http.parse().unwrap())
-            .get_block_number().await.unwrap_or(0);
+        let block = ProviderBuilder::new()
+            .connect_http(self.config.rpc_http.parse().unwrap())
+            .get_block_number()
+            .await
+            .unwrap_or(0);
         self.last_cycle_block.store(block, Ordering::Relaxed);
-        info!("Keeper cycle: {}/{} ok, {} failed", report.succeeded, report.attempted, report.failed);
+        info!(
+            "Keeper cycle: {}/{} ok, {} failed",
+            report.succeeded, report.attempted, report.failed
+        );
         Ok(report)
     }
 
@@ -130,7 +159,9 @@ impl KeeperService {
         let mut ticker = tokio::time::interval(Duration::from_secs(self.config.poll_interval_secs));
         loop {
             ticker.tick().await;
-            if let Err(e) = self.run_cycle().await { error!("Keeper cycle: {e}"); }
+            if let Err(e) = self.run_cycle().await {
+                error!("Keeper cycle: {e}");
+            }
         }
     }
 

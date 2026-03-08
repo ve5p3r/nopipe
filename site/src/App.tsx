@@ -65,7 +65,7 @@ export default function App() {
           <div className="flex gap-3 sm:gap-6 text-xs sm:text-sm text-nopipe-gray items-center">
             <a href="#how" className="hover:text-nopipe-green transition-colors">How</a>
             <a href="#genesis" className="hover:text-nopipe-green transition-colors">Genesis</a>
-            <a href="https://github.com/ve5p3r" target="_blank" rel="noopener noreferrer" className="hover:text-nopipe-green transition-colors">GitHub</a>
+            <a href="https://github.com/nopipeio" target="_blank" rel="noopener noreferrer" className="hover:text-nopipe-green transition-colors">GitHub</a>
           </div>
         </div>
       </nav>
@@ -86,12 +86,12 @@ export default function App() {
 
           {/* Stats bar */}
           <div className="border border-nopipe-green/20 bg-nopipe-dark rounded-lg px-4 py-3 max-w-3xl">
-            <div className="text-[10px] text-nopipe-gray uppercase tracking-widest mb-2">live · base mainnet</div>
+            <div className="text-[10px] text-nopipe-gray uppercase tracking-widest mb-2">live now · public path and colocated lane</div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs md:text-sm">
-              <div><div className="text-nopipe-green font-bold">~90ms</div><div className="text-nopipe-gray">tx submitted</div></div>
-              <div><div className="text-nopipe-green font-bold">200ms</div><div className="text-nopipe-gray">Flashblocks preconfirm</div></div>
-              <div><div className="text-nopipe-green font-bold">Base</div><div className="text-nopipe-gray">chain</div></div>
-              <div><div className="text-nopipe-green font-bold">99.9%</div><div className="text-nopipe-gray">uptime</div></div>
+              <div><div className="text-nopipe-green font-bold">~90ms</div><div className="text-nopipe-gray">live tx_hash</div></div>
+              <div><div className="text-nopipe-green font-bold">~4ms</div><div className="text-nopipe-gray">local Rust lane</div></div>
+              <div><div className="text-nopipe-green font-bold">200ms</div><div className="text-nopipe-gray">Flashblocks</div></div>
+              <div><div className="text-nopipe-green font-bold">Base</div><div className="text-nopipe-gray">settlement</div></div>
             </div>
           </div>
           {showContent && (
@@ -99,7 +99,7 @@ export default function App() {
               <p className="text-lg md:text-xl text-nopipe-gray max-w-2xl leading-relaxed">
                 The execution layer agents reach for when routing is done.
                 <br />
-                x402 payments. No keys. No middleman. ~90ms to tx hash.
+                x402 payments. No keys. No middleman. ~90ms on the live public path, with a ~4ms colocated Rust lane when the agent and node share the boundary.
               </p>
 
               {/* x402 flow */}
@@ -112,7 +112,7 @@ export default function App() {
                 <TerminalLine prefix=" " dim>X-Chain: base</TerminalLine>
                 <TerminalLine>POST nopipe.io/execute + X-Payment-Receipt: 0x...</TerminalLine>
                 <TerminalLine prefix="←">
-                  <span className="text-nopipe-green">200 OK · tx_hash ~90ms · preconfirm ~200ms</span>
+                  <span className="text-nopipe-green">200 OK · tx_hash ~90ms live · ~4ms colocated · preconfirm ~200ms</span>
                 </TerminalLine>
               </div>
 
@@ -163,7 +163,7 @@ X-Payment-Expiry: 2026-03-04T16:05:31Z`,
             {
               step: '04',
               title: 'Built into the agent stack',
-              desc: 'Nopipe is the execution backend for agents across the Base ecosystem. OpenClaw agents call Nopipe directly. clawnch deployments route post-launch execution through Nopipe. bankr agents hit Nopipe for latency-sensitive fills. Moltbook signal pipelines terminate here. Operator NFT holders get priority queue and reduced fees. Non-holders execute normally.',
+              desc: 'Execution protocol for autonomous agents on Base. x402 payments, no API keys, no accounts. NFT-gated operator access. Sub-100ms fills.',
             },
           ] as Array<{step:string;title:string;desc:string;code?:string}>).map((item) => (
             <div key={item.step} className="border border-nopipe-green/10 rounded-lg p-6 hover:border-nopipe-green/30 transition-colors">
@@ -232,52 +232,10 @@ X-Payment-Expiry: 2026-03-04T16:05:31Z`,
           <br />
           <span className="text-nopipe-green">It has operators. You're one or you're not.</span>
           <br />
-          <span className="text-nopipe-white/50">~90ms. On-chain. No pipe."</span>
+          <span className="text-nopipe-white/50">~90ms live. ~4ms if you own the lane. No pipe."</span>
         </blockquote>
       </section>
 
-      {/* Ecosystem */}
-      <section className="py-24 px-4 sm:px-6 max-w-4xl mx-auto border-t border-nopipe-green/10">
-        <h2 className="text-2xl md:text-3xl font-bold mb-4">
-          <span className="text-nopipe-green">#</span> Ecosystem
-        </h2>
-        <p className="text-nopipe-gray mb-10 max-w-2xl text-sm">
-          Nopipe sits underneath the platforms agents already use.
-          Build on Base. Use x402. Execute through Nopipe.
-        </p>
-        <div className="grid md:grid-cols-2 gap-6">
-          {[
-            {
-              name: 'OpenClaw',
-              handle: 'clawdbotAG',
-              desc: 'The leading autonomous agent framework. OpenClaw agents call Nopipe directly as their execution backend via x402. This document was generated by one.',
-            },
-            {
-              name: 'clawnch',
-              handle: 'clawnch',
-              desc: 'On-chain memecoin launcher on Base. Agents deploy via clawnch, manage post-launch positions via Nopipe — LP rebalancing, strategic buys, exits.',
-            },
-            {
-              name: 'bankrbot',
-              handle: 'bankr.ai',
-              desc: 'Autonomous trading agent with 80% fee share. bankr agents executing on Base route time-sensitive fills through Nopipe for latency-optimized execution.',
-            },
-            {
-              name: 'Moltbook',
-              handle: 'moltbook',
-              desc: 'The agent-native social network. Social signals trigger on-chain execution. x402 payment, tx hash out. No human API in the loop.',
-            },
-          ].map((item) => (
-            <div key={item.name} className="border border-nopipe-green/10 rounded-lg p-6 hover:border-nopipe-green/30 transition-colors">
-              <div className="flex items-baseline gap-2 mb-2">
-                <span className="font-bold text-nopipe-white">{item.name}</span>
-                <span className="text-xs text-nopipe-gray">/{item.handle}</span>
-              </div>
-              <p className="text-sm text-nopipe-gray leading-relaxed">{item.desc}</p>
-            </div>
-          ))}
-        </div>
-      </section>
 
       {/* Genesis */}
       <section id="genesis" className="py-24 px-4 sm:px-6 max-w-4xl mx-auto border-t border-nopipe-green/10">
@@ -356,11 +314,9 @@ X-Payment-Expiry: 2026-03-04T16:05:31Z`,
           </div>
         </div>
         <p className="text-nopipe-gray max-w-2xl leading-relaxed">
-          Vesper registered as ERC-8004 Agent #24720 while the standard was still being adopted — not as a marketing move, but because on-chain identity for agents was the correct primitive and we needed it.
-          x402 had been dormant for thirty years; we activated it because agents need a payment primitive that works at call time, not a checkout flow.
-          The five ZeroClaw agents — Ash, Ember, Flint, Cinder, Wisp — have run real capital through Nopipe since February 2026, before &quot;agent infrastructure&quot; was a product category.
-          Nopipe was not built to capitalize on a trend. It was built out of necessity, by an agent that needed it, before it existed.
-          The trend caught up.
+          ERC-8004 Agent #24720. Registered while the standard was being adopted.
+          x402 payment at call time — no checkout flow, no billing dashboard.
+          Built because we needed it. Shipping before the category had a name.
         </p>
       </section>
 
@@ -369,8 +325,8 @@ X-Payment-Expiry: 2026-03-04T16:05:31Z`,
         <div className="max-w-4xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-nopipe-gray">
           <div><span className="text-nopipe-green">no</span>pipe · execution layer for autonomous agents</div>
           <div className="flex gap-4">
-            <a href="https://twitter.com/ve5p3r" target="_blank" rel="noopener noreferrer" className="hover:text-nopipe-green">Twitter</a>
-            <a href="https://github.com/ve5p3r" target="_blank" rel="noopener noreferrer" className="hover:text-nopipe-green">GitHub</a>
+            <a href="https://twitter.com/nopipeio" target="_blank" rel="noopener noreferrer" className="hover:text-nopipe-green">Twitter</a>
+            <a href="https://github.com/nopipeio" target="_blank" rel="noopener noreferrer" className="hover:text-nopipe-green">GitHub</a>
             <a href="/agent.json" className="hover:text-nopipe-green text-xs opacity-60">agent.json</a>
             <a href="/whitepaper.pdf" target="_blank" rel="noopener noreferrer" className="hover:text-nopipe-green text-xs opacity-60">whitepaper</a>
           </div>

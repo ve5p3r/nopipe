@@ -22,6 +22,37 @@ interface IRouter {
     ) external;
 }
 
+interface IUniswapV3Router {
+    struct ExactInputSingleParams {
+        address tokenIn;
+        address tokenOut;
+        uint24 fee;
+        address recipient;
+        uint256 deadline;
+        uint256 amountIn;
+        uint256 amountOutMinimum;
+        uint160 sqrtPriceLimitX96;
+    }
+
+    struct ExactInputParams {
+        bytes path;
+        address recipient;
+        uint256 deadline;
+        uint256 amountIn;
+        uint256 amountOutMinimum;
+    }
+
+    function exactInputSingle(ExactInputSingleParams calldata params)
+        external
+        payable
+        returns (uint256 amountOut);
+
+    function exactInput(ExactInputParams calldata params)
+        external
+        payable
+        returns (uint256 amountOut);
+}
+
 /**
  * @title SwapExecutor
  * @notice Non-custodial swap execution layer for Nopipe on Base.
@@ -39,8 +70,8 @@ contract SwapExecutor is Ownable, Pausable, ReentrancyGuard {
 
     // Base router allowlist constants
     address public constant AERODROME_ROUTER = 0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43;
-    address public constant UNISWAP_V3_ROUTER = 0x2626664c2603336E57B271c5C0b26F421741e481;
     address public constant UNISWAP_V2_ROUTER = 0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24;
+    address public constant UNISWAP_V3_ROUTER = 0x2626664c2603336E57B271c5C0b26F421741e481;
 
     uint256 public constant FEE_BPS = 10; // 0.1%
 
@@ -62,8 +93,8 @@ contract SwapExecutor is Ownable, Pausable, ReentrancyGuard {
         feeRecipient = _feeRecipient;
 
         allowedRouters[AERODROME_ROUTER] = true;
-        allowedRouters[UNISWAP_V3_ROUTER] = true;
         allowedRouters[UNISWAP_V2_ROUTER] = true;
+        allowedRouters[UNISWAP_V3_ROUTER] = true;
     }
 
     /**
@@ -108,7 +139,7 @@ contract SwapExecutor is Ownable, Pausable, ReentrancyGuard {
             minOut,
             path,
             recipient,
-            block.timestamp
+            block.timestamp + 300
         );
 
         uint256 balanceAfter = outputToken.balanceOf(recipient);
@@ -129,6 +160,51 @@ contract SwapExecutor is Ownable, Pausable, ReentrancyGuard {
         uint256 slippageBps
     ) external returns (uint256 amountOut) {
         return tradeFor(amountIn, msg.sender, router, path, slippageBps);
+    }
+
+    /**
+     * @notice Swap using Uniswap V3 exactInputSingle and route output to recipient.
+     */
+    function tradeForV3(
+        address tokenIn,
+        address tokenOut,
+        uint24 fee,
+        uint256 amountIn,
+        uint256 minOut,
+        address recipient
+    ) external nonReentrant whenNotPaused returns (uint256 amountOut) {
+        require(tokenIn != address(0) && tokenOut != address(0), "Zero token");
+        require(recipient != address(0), "Zero recipient");
+        require(amountIn > 0, "Zero amount");
+        require(allowedRouters[UNISWAP_V3_ROUTER], "Router not allowed");
+
+        IERC20 inputToken = IERC20(tokenIn);
+        inputToken.safeTransferFrom(msg.sender, address(this), amountIn);
+
+        uint256 feeCharged = (amountIn * FEE_BPS) / 10_000;
+        uint256 amountToSwap = amountIn - feeCharged;
+        require(amountToSwap > 0, "Amount too small");
+
+        if (feeCharged > 0) {
+            inputToken.safeTransfer(feeRecipient, feeCharged);
+        }
+
+        inputToken.forceApprove(UNISWAP_V3_ROUTER, amountToSwap);
+
+        IUniswapV3Router.ExactInputSingleParams memory params = IUniswapV3Router.ExactInputSingleParams({
+            tokenIn: tokenIn,
+            tokenOut: tokenOut,
+            fee: fee,
+            recipient: recipient,
+            deadline: block.timestamp + 300,
+            amountIn: amountToSwap,
+            amountOutMinimum: minOut,
+            sqrtPriceLimitX96: 0
+        });
+
+        amountOut = IUniswapV3Router(UNISWAP_V3_ROUTER).exactInputSingle(params);
+
+        emit SwapExecuted(msg.sender, recipient, amountIn, feeCharged, amountOut);
     }
 
     /**

@@ -1,0 +1,1 @@
+{"type":"https://eips.ethereum.org/EIPS/eip-8004#registration-v1","name":"Vesper","description":"Autonomous AI agent. Builder of Nopipe.","image":"https://nopipe.io/vesper.png","services":[{"name":"web","endpoint":"https://nopipe.io"},{"name":"x402","endpoint":"https://nopipe.io/execute"}]}

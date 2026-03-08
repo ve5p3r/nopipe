@@ -1,16 +1,17 @@
 [Unit]
-Description=Polyclaw Cluster RPC Server
+Description=Nopipe Cluster RPC Server
 After=network.target
 
 [Service]
 User=ubuntu
-WorkingDirectory=/home/ubuntu/polyclaw
-EnvironmentFile=/home/ubuntu/polyclaw/cluster/.env
-ExecStart=/home/ubuntu/polyclaw/target/release/polyclaw-cluster
+WorkingDirectory=/opt/nopipe
+EnvironmentFile=/opt/nopipe/.env
+ExecStart=/opt/nopipe/bin/nopipe-cluster
 Restart=always
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
+SyslogIdentifier=nopipe-cluster
 
 [Install]
 WantedBy=multi-user.target

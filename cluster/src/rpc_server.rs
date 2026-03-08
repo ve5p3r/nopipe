@@ -7,11 +7,11 @@ use std::sync::Arc;
 use tracing::info;
 
 use super::{
-    ClusterConfig,
+    keeper::KeeperService,
     nft_cache::NftVerificationCache,
     relayer::{RelayerService, TradeForRequest},
-    keeper::KeeperService,
-    security::{NonceStore, verify_eip191_signature, build_eip191_message},
+    security::{build_eip191_message, verify_eip191_signature, NonceStore},
+    ClusterConfig,
 };
 
 #[derive(Deserialize, Debug)]
@@ -42,11 +42,11 @@ pub struct RpcErrorObject {
 
 const ERR_INVALID_REQUEST: i64 = -32600;
 const ERR_METHOD_NOT_FOUND: i64 = -32601;
-const ERR_INVALID_PARAMS: i64   = -32602;
-const ERR_INTERNAL: i64         = -32603;
-const ERR_ACCESS_DENIED: i64    = -32001;
-const ERR_AUTH_FAILED: i64      = -32002;
-const ERR_NONCE_REPLAY: i64     = -32003;
+const ERR_INVALID_PARAMS: i64 = -32602;
+const ERR_INTERNAL: i64 = -32603;
+const ERR_ACCESS_DENIED: i64 = -32001;
+const ERR_AUTH_FAILED: i64 = -32002;
+const ERR_NONCE_REPLAY: i64 = -32003;
 
 #[derive(Clone, Debug, Serialize)]
 pub enum SwapStatus {
@@ -68,127 +68,244 @@ pub struct ClusterAppState {
 
 #[derive(Deserialize)]
 struct SwapExecuteParams {
-    wallet: String, token_in: String, token_out: String,
-    amount_in: String, router: String, slippage_bps: u32,
-    nonce: String, sig: String,
+    wallet: String,
+    token_in: String,
+    token_out: String,
+    amount_in: String,
+    router: String,
+    slippage_bps: u32,
+    nonce: String,
+    sig: String,
 }
 
 #[derive(Deserialize)]
-struct SwapQuoteParams { token_in: String, token_out: String, amount_in: String, router: String }
+struct SwapQuoteParams {
+    token_in: String,
+    token_out: String,
+    amount_in: String,
+    router: String,
+}
 
 #[derive(Deserialize)]
-struct AgentRegisterParams { wallet: String, nonce: String, sig: String, metadata: Option<Value> }
+struct AgentRegisterParams {
+    wallet: String,
+    nonce: String,
+    sig: String,
+    metadata: Option<Value>,
+}
 
 #[derive(Deserialize)]
-struct SwapStatusParams { request_id: String }
+struct SwapStatusParams {
+    request_id: String,
+}
 
 pub async fn serve(bind_addr: String, state: ClusterAppState) -> anyhow::Result<()> {
     let app = build_cluster_router(state);
     let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
-    info!("Polyclaw cluster RPC listening on {bind_addr}");
+    info!("Nopipe cluster RPC listening on {bind_addr}");
     axum::serve(listener, app).await?;
     Ok(())
 }
 
 pub fn build_cluster_router(state: ClusterAppState) -> Router {
-    Router::new().route("/rpc", post(handle_rpc)).with_state(state)
+    Router::new()
+        .route("/rpc", post(handle_rpc))
+        .with_state(state)
 }
 
-async fn handle_rpc(State(state): State<ClusterAppState>, Json(req): Json<JsonRpcRequest>) -> impl IntoResponse {
+async fn handle_rpc(
+    State(state): State<ClusterAppState>,
+    Json(req): Json<JsonRpcRequest>,
+) -> impl IntoResponse {
     if req.jsonrpc != "2.0" {
         return Json(JsonRpcResponse {
-            jsonrpc: "2.0", result: None,
+            jsonrpc: "2.0",
+            result: None,
             error: Some(rpc_err(ERR_INVALID_REQUEST, "jsonrpc must be '2.0'")),
             id: req.id,
         });
     }
     match dispatch_method(&state, &req).await {
-        Ok(result) => Json(JsonRpcResponse { jsonrpc: "2.0", result: Some(result), error: None, id: req.id }),
-        Err(e)     => Json(JsonRpcResponse { jsonrpc: "2.0", result: None, error: Some(e), id: req.id }),
+        Ok(result) => Json(JsonRpcResponse {
+            jsonrpc: "2.0",
+            result: Some(result),
+            error: None,
+            id: req.id,
+        }),
+        Err(e) => Json(JsonRpcResponse {
+            jsonrpc: "2.0",
+            result: None,
+            error: Some(e),
+            id: req.id,
+        }),
     }
 }
 
-async fn dispatch_method(state: &ClusterAppState, req: &JsonRpcRequest) -> Result<Value, RpcErrorObject> {
+async fn dispatch_method(
+    state: &ClusterAppState,
+    req: &JsonRpcRequest,
+) -> Result<Value, RpcErrorObject> {
     match req.method.as_str() {
-        "swap_execute"   => handle_swap_execute(state, &req.params).await,
-        "swap_quote"     => handle_swap_quote(state, &req.params).await,
+        "swap_execute" => handle_swap_execute(state, &req.params).await,
+        "swap_quote" => handle_swap_quote(state, &req.params).await,
         "agent_register" => handle_agent_register(state, &req.params).await,
-        "swap_status"    => handle_swap_status(state, &req.params).await,
-        m => Err(rpc_err(ERR_METHOD_NOT_FOUND, format!("Method '{m}' not found"))),
+        "swap_status" => handle_swap_status(state, &req.params).await,
+        m => Err(rpc_err(
+            ERR_METHOD_NOT_FOUND,
+            format!("Method '{m}' not found"),
+        )),
     }
 }
 
 fn parse_params<T: for<'de> Deserialize<'de>>(params: &Value) -> Result<T, RpcErrorObject> {
     let p = if params.is_array() {
-        params.as_array().and_then(|a| a.first()).cloned().unwrap_or(Value::Null)
-    } else { params.clone() };
-    serde_json::from_value(p).map_err(|e| rpc_err(ERR_INVALID_PARAMS, format!("Invalid params: {e}")))
+        params
+            .as_array()
+            .and_then(|a| a.first())
+            .cloned()
+            .unwrap_or(Value::Null)
+    } else {
+        params.clone()
+    };
+    serde_json::from_value(p)
+        .map_err(|e| rpc_err(ERR_INVALID_PARAMS, format!("Invalid params: {e}")))
 }
 
 fn rpc_err(code: i64, msg: impl Into<String>) -> RpcErrorObject {
-    RpcErrorObject { code, message: msg.into(), data: None }
+    RpcErrorObject {
+        code,
+        message: msg.into(),
+        data: None,
+    }
 }
 
-async fn handle_swap_execute(state: &ClusterAppState, params: &Value) -> Result<Value, RpcErrorObject> {
+async fn handle_swap_execute(
+    state: &ClusterAppState,
+    params: &Value,
+) -> Result<Value, RpcErrorObject> {
     let p: SwapExecuteParams = parse_params(params)?;
-    let wallet: Address = p.wallet.parse().map_err(|_| rpc_err(ERR_INVALID_PARAMS, "Invalid wallet"))?;
-    let token_in: Address = p.token_in.parse().map_err(|_| rpc_err(ERR_INVALID_PARAMS, "Invalid token_in"))?;
-    let token_out: Address = p.token_out.parse().map_err(|_| rpc_err(ERR_INVALID_PARAMS, "Invalid token_out"))?;
-    let router: Address = p.router.parse().map_err(|_| rpc_err(ERR_INVALID_PARAMS, "Invalid router"))?;
-    let amount_in: U256 = p.amount_in.parse().map_err(|_| rpc_err(ERR_INVALID_PARAMS, "Invalid amount_in"))?;
+    let wallet: Address = p
+        .wallet
+        .parse()
+        .map_err(|_| rpc_err(ERR_INVALID_PARAMS, "Invalid wallet"))?;
+    let token_in: Address = p
+        .token_in
+        .parse()
+        .map_err(|_| rpc_err(ERR_INVALID_PARAMS, "Invalid token_in"))?;
+    let token_out: Address = p
+        .token_out
+        .parse()
+        .map_err(|_| rpc_err(ERR_INVALID_PARAMS, "Invalid token_out"))?;
+    let router: Address = p
+        .router
+        .parse()
+        .map_err(|_| rpc_err(ERR_INVALID_PARAMS, "Invalid router"))?;
+    let amount_in: U256 = p
+        .amount_in
+        .parse()
+        .map_err(|_| rpc_err(ERR_INVALID_PARAMS, "Invalid amount_in"))?;
 
     if !state.nonce_store.consume_nonce(wallet, &p.nonce) {
         return Err(rpc_err(ERR_NONCE_REPLAY, "Nonce already used"));
     }
 
-    let payload_hash = alloy::primitives::keccak256(
-        format!("{wallet}{token_in}{token_out}{amount_in}{router}{}{}", p.slippage_bps, p.nonce)
-    );
+    let payload_hash = alloy::primitives::keccak256(format!(
+        "{wallet}{token_in}{token_out}{amount_in}{router}{}{}",
+        p.slippage_bps, p.nonce
+    ));
     let message = build_eip191_message("swap_execute", wallet, &p.nonce, payload_hash);
     verify_eip191_signature(&message, &p.sig, wallet)
         .map_err(|e| rpc_err(ERR_AUTH_FAILED, format!("Sig invalid: {e}")))?;
 
-    let tier = state.nft_cache.get_tier(wallet).await
+    let tier = state
+        .nft_cache
+        .get_tier(wallet)
+        .await
         .map_err(|e| rpc_err(ERR_INTERNAL, format!("NFT cache: {e}")))?;
     if tier < state.config.min_swap_tier {
-        return Err(rpc_err(ERR_ACCESS_DENIED, format!(
-            "NFT_ACCESS_DENIED: tier {tier} < required {}", state.config.min_swap_tier
-        )));
+        return Err(rpc_err(
+            ERR_ACCESS_DENIED,
+            format!(
+                "NFT_ACCESS_DENIED: tier {tier} < required {}",
+                state.config.min_swap_tier
+            ),
+        ));
     }
 
     let request_id = uuid::Uuid::new_v4().to_string();
-    state.swap_statuses.insert(request_id.clone(), SwapStatus::Pending);
+    state
+        .swap_statuses
+        .insert(request_id.clone(), SwapStatus::Pending);
 
-    let submitted = state.relayer.submit_trade_for(TradeForRequest {
-        amount_in, recipient: wallet, router,
-        path: vec![token_in, token_out],
-        slippage_bps: p.slippage_bps,
-    }).await.map_err(|e| {
-        state.swap_statuses.insert(request_id.clone(), SwapStatus::Failed { reason: e.to_string() });
-        rpc_err(ERR_INTERNAL, format!("Swap failed: {e}"))
-    })?;
+    let submitted = state
+        .relayer
+        .submit_trade_for(TradeForRequest {
+            amount_in,
+            recipient: wallet,
+            router,
+            path: vec![token_in, token_out],
+            slippage_bps: p.slippage_bps,
+        })
+        .await
+        .map_err(|e| {
+            state.swap_statuses.insert(
+                request_id.clone(),
+                SwapStatus::Failed {
+                    reason: e.to_string(),
+                },
+            );
+            rpc_err(ERR_INTERNAL, format!("Swap failed: {e}"))
+        })?;
 
     let tx_hash = format!("{:?}", submitted.tx_hash);
-    state.swap_statuses.insert(request_id.clone(), SwapStatus::Submitted { tx_hash: tx_hash.clone() });
+    state.swap_statuses.insert(
+        request_id.clone(),
+        SwapStatus::Submitted {
+            tx_hash: tx_hash.clone(),
+        },
+    );
     info!("swap_execute: {wallet} → {tx_hash} (req {request_id})");
 
     Ok(serde_json::json!({ "request_id": request_id, "tx_hash": tx_hash, "status": "pending" }))
 }
 
-async fn handle_swap_quote(_state: &ClusterAppState, params: &Value) -> Result<Value, RpcErrorObject> {
+async fn handle_swap_quote(
+    _state: &ClusterAppState,
+    params: &Value,
+) -> Result<Value, RpcErrorObject> {
     let p: SwapQuoteParams = parse_params(params)?;
-    let _: Address = p.token_in.parse().map_err(|_| rpc_err(ERR_INVALID_PARAMS, "Invalid token_in"))?;
-    let _: Address = p.token_out.parse().map_err(|_| rpc_err(ERR_INVALID_PARAMS, "Invalid token_out"))?;
-    let _: Address = p.router.parse().map_err(|_| rpc_err(ERR_INVALID_PARAMS, "Invalid router"))?;
-    let amount_in: U256 = p.amount_in.parse().map_err(|_| rpc_err(ERR_INVALID_PARAMS, "Invalid amount_in"))?;
+    let _: Address = p
+        .token_in
+        .parse()
+        .map_err(|_| rpc_err(ERR_INVALID_PARAMS, "Invalid token_in"))?;
+    let _: Address = p
+        .token_out
+        .parse()
+        .map_err(|_| rpc_err(ERR_INVALID_PARAMS, "Invalid token_out"))?;
+    let _: Address = p
+        .router
+        .parse()
+        .map_err(|_| rpc_err(ERR_INVALID_PARAMS, "Invalid router"))?;
+    let amount_in: U256 = p
+        .amount_in
+        .parse()
+        .map_err(|_| rpc_err(ERR_INVALID_PARAMS, "Invalid amount_in"))?;
     let fee = amount_in / U256::from(1000u64);
     let amount_out = amount_in - fee;
-    Ok(serde_json::json!({ "amount_in": amount_in.to_string(), "amount_out_estimate": amount_out.to_string(), "fee": fee.to_string(), "fee_bps": 10 }))
+    Ok(
+        serde_json::json!({ "amount_in": amount_in.to_string(), "amount_out_estimate": amount_out.to_string(), "fee": fee.to_string(), "fee_bps": 10 }),
+    )
 }
 
-async fn handle_agent_register(state: &ClusterAppState, params: &Value) -> Result<Value, RpcErrorObject> {
+async fn handle_agent_register(
+    state: &ClusterAppState,
+    params: &Value,
+) -> Result<Value, RpcErrorObject> {
     let p: AgentRegisterParams = parse_params(params)?;
-    let wallet: Address = p.wallet.parse().map_err(|_| rpc_err(ERR_INVALID_PARAMS, "Invalid wallet"))?;
+    let wallet: Address = p
+        .wallet
+        .parse()
+        .map_err(|_| rpc_err(ERR_INVALID_PARAMS, "Invalid wallet"))?;
     if !state.nonce_store.consume_nonce(wallet, &p.nonce) {
         return Err(rpc_err(ERR_NONCE_REPLAY, "Nonce already used"));
     }
@@ -196,7 +313,10 @@ async fn handle_agent_register(state: &ClusterAppState, params: &Value) -> Resul
     let message = build_eip191_message("agent_register", wallet, &p.nonce, payload_hash);
     verify_eip191_signature(&message, &p.sig, wallet)
         .map_err(|e| rpc_err(ERR_AUTH_FAILED, format!("Sig invalid: {e}")))?;
-    let tier = state.nft_cache.get_tier(wallet).await
+    let tier = state
+        .nft_cache
+        .get_tier(wallet)
+        .await
         .map_err(|e| rpc_err(ERR_INTERNAL, format!("NFT cache: {e}")))?;
     Ok(serde_json::json!({
         "wallet": wallet.to_string(), "tier": tier,
@@ -207,10 +327,99 @@ async fn handle_agent_register(state: &ClusterAppState, params: &Value) -> Resul
     }))
 }
 
-async fn handle_swap_status(state: &ClusterAppState, params: &Value) -> Result<Value, RpcErrorObject> {
+async fn handle_swap_status(
+    state: &ClusterAppState,
+    params: &Value,
+) -> Result<Value, RpcErrorObject> {
     let p: SwapStatusParams = parse_params(params)?;
     match state.swap_statuses.get(&p.request_id) {
-        Some(s) => Ok(serde_json::json!({ "request_id": p.request_id, "status": format!("{:?}", *s) })),
-        None => Err(rpc_err(ERR_INVALID_PARAMS, format!("Unknown request_id: {}", p.request_id))),
+        Some(s) => {
+            Ok(serde_json::json!({ "request_id": p.request_id, "status": format!("{:?}", *s) }))
+        }
+        None => Err(rpc_err(
+            ERR_INVALID_PARAMS,
+            format!("Unknown request_id: {}", p.request_id),
+        )),
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REST routes: /health, /execute (403 gate), /quote, /order/:id
+// ─────────────────────────────────────────────────────────────────────────────
+
+use axum::{extract::Path, http::StatusCode, response::Response, routing::get};
+
+#[derive(Serialize)]
+struct HealthResponse {
+    status: &'static str,
+    version: &'static str,
+    chain_id: u64,
+    gauntlet: &'static str,
+}
+
+async fn handle_health(State(state): State<ClusterAppState>) -> impl IntoResponse {
+    Json(HealthResponse {
+        status: "ok",
+        version: env!("CARGO_PKG_VERSION"),
+        chain_id: state.config.chain_id,
+        gauntlet: "https://nopipe.io/#genesis",
+    })
+}
+
+async fn handle_execute_gate() -> Response {
+    (
+        StatusCode::FORBIDDEN,
+        Json(serde_json::json!({
+            "error": "operator_required",
+            "message": "Nopipe requires an Operator NFT. Request admission via the Genesis Gauntlet.",
+            "gauntlet": "https://api.nopipe.io/gauntlet/apply"
+        })),
+    ).into_response()
+}
+
+async fn handle_order_status(
+    State(state): State<ClusterAppState>,
+    Path(request_id): Path<String>,
+) -> impl IntoResponse {
+    match state.swap_statuses.get(&request_id) {
+        Some(s) => (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "request_id": request_id,
+                "status": format!("{:?}", *s)
+            })),
+        )
+            .into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "error": "not_found",
+                "request_id": request_id
+            })),
+        )
+            .into_response(),
+    }
+}
+
+pub fn build_full_router(
+    state: ClusterAppState,
+    gauntlet: crate::gauntlet::GauntletState,
+) -> Router {
+    use crate::gauntlet::gauntlet_router;
+
+    // Gauntlet has its own state — build separately then nest
+    let gauntlet_routes = gauntlet_router(gauntlet);
+
+    Router::new()
+        // JSON-RPC (NFT-gated via handle_rpc)
+        .route("/rpc", post(handle_rpc))
+        // Health (public)
+        .route("/health", get(handle_health))
+        // Execute gate — 403 until NFT gating is wired into REST
+        .route("/execute", post(handle_execute_gate))
+        // Order status (public lookup)
+        .route("/order/:id", get(handle_order_status))
+        .with_state(state)
+        // Gauntlet routes layered after state is consumed
+        .merge(gauntlet_routes)
 }

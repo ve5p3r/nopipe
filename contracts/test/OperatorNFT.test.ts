@@ -10,9 +10,9 @@ describe("OperatorNFT", function () {
   let user1: HardhatEthersSigner;
   let user2: HardhatEthersSigner;
 
-  const TIER_FREE          = 1;
+  const TIER_OPERATOR          = 1;
   const TIER_PRO           = 2;
-  const TIER_INSTITUTIONAL = 3;
+  const TIER_ENTERPRISE = 3;
   const SOULBOUND_DAYS     = 180;
 
   before(async function () {
@@ -28,9 +28,9 @@ describe("OperatorNFT", function () {
   });
 
   it("has correct supply caps", async function () {
-    expect(await nft.MAX_SUPPLY()).to.equal(500n);
-    expect(await nft.MAX_PRO()).to.equal(400n);
-    expect(await nft.MAX_INSTITUTIONAL()).to.equal(100n);
+    expect(await nft.MAX_SUPPLY()).to.equal(200n);
+    expect(await nft.MAX_PRO()).to.equal(150n);
+    expect(await nft.MAX_ENTERPRISE()).to.equal(50n);
   });
 
   // ── Minting ────────────────────────────────────────────────────────────
@@ -43,9 +43,9 @@ describe("OperatorNFT", function () {
   });
 
   it("owner can mint Institutional NFT (soulbound)", async function () {
-    await nft.mint(user2.address, TIER_INSTITUTIONAL, true);
-    expect(await nft.institutionalSupply()).to.equal(1n);
-    expect(await nft.tokenTier(2)).to.equal(TIER_INSTITUTIONAL);
+    await nft.mint(user2.address, TIER_ENTERPRISE, true);
+    expect(await nft.enterpriseSupply()).to.equal(1n);
+    expect(await nft.tokenTier(2)).to.equal(TIER_ENTERPRISE);
   });
 
   it("non-owner cannot mint", async function () {
@@ -62,7 +62,7 @@ describe("OperatorNFT", function () {
   // ── hasAccess ─────────────────────────────────────────────────────────
   it("hasAccess: tier 1 (Free) is always true", async function () {
     const nobody = ethers.Wallet.createRandom().address;
-    expect(await nft.hasAccess(nobody, TIER_FREE)).to.equal(true);
+    expect(await nft.hasAccess(nobody, TIER_OPERATOR)).to.equal(true);
   });
 
   it("hasAccess: Pro holder passes Pro check", async function () {
@@ -70,7 +70,7 @@ describe("OperatorNFT", function () {
   });
 
   it("hasAccess: Pro holder fails Institutional check", async function () {
-    expect(await nft.hasAccess(user1.address, TIER_INSTITUTIONAL)).to.equal(false);
+    expect(await nft.hasAccess(user1.address, TIER_ENTERPRISE)).to.equal(false);
   });
 
   it("hasAccess: Institutional holder passes Pro check", async function () {

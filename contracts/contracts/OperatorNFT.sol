@@ -11,9 +11,13 @@ import "@openzeppelin/contracts/utils/Strings.sol";
  * @notice Nopipe operator license NFT.
  *
  * Tiers:
- *   1 = Free
+ *   1 = Operator
  *   2 = Pro
- *   3 = Institutional
+ *   3 = Enterprise
+ *
+ * Supply:
+ *   MAX_SUPPLY = 200 (network capacity with direct servicing)
+ *   GENESIS_SUPPLY = 25 (founding cohort, Gauntlet-gated)
  *
  * Core upgrades:
  * - O(1) access checks via highestTier mapping
@@ -24,21 +28,23 @@ import "@openzeppelin/contracts/utils/Strings.sol";
 contract OperatorNFT is ERC721, Ownable {
     using Strings for uint256;
 
-    uint8 public constant TIER_FREE = 1;
+    uint8 public constant TIER_OPERATOR = 1;
     uint8 public constant TIER_PRO = 2;
-    uint8 public constant TIER_INSTITUTIONAL = 3;
+    uint8 public constant TIER_ENTERPRISE = 3;
 
-    uint256 public constant MAX_SUPPLY = 500;
-    uint256 public constant MAX_PRO = 400;
-    uint256 public constant MAX_INSTITUTIONAL = 100;
+    uint256 public constant MAX_SUPPLY = 200;
+    uint256 public constant MAX_PRO = 150;
+    uint256 public constant MAX_ENTERPRISE = 50;
+    uint256 public constant GENESIS_SUPPLY = 25;
 
     uint256 public constant SOULBOUND_DAYS = 180;
 
     uint256 private _nextTokenId;
 
     uint256 public totalSupply;
+    uint256 public operatorSupply;
     uint256 public proSupply;
-    uint256 public institutionalSupply;
+    uint256 public enterpriseSupply;
 
     mapping(uint256 => uint8) private _tier;
     mapping(uint256 => bool) private _soulbound;
@@ -80,15 +86,17 @@ contract OperatorNFT is ERC721, Ownable {
 
     function _mintInternal(address to, uint8 tier, bool soulbound_) private {
         require(to != address(0), "Zero recipient");
-        require(tier >= TIER_FREE && tier <= TIER_INSTITUTIONAL, "Invalid tier");
+        require(tier >= TIER_OPERATOR && tier <= TIER_ENTERPRISE, "Invalid tier");
         require(totalSupply < MAX_SUPPLY, "Max supply reached");
 
         if (tier == TIER_PRO) {
             require(proSupply < MAX_PRO, "Pro cap reached");
             proSupply++;
-        } else if (tier == TIER_INSTITUTIONAL) {
-            require(institutionalSupply < MAX_INSTITUTIONAL, "Institutional cap reached");
-            institutionalSupply++;
+        } else if (tier == TIER_ENTERPRISE) {
+            require(enterpriseSupply < MAX_ENTERPRISE, "Enterprise cap reached");
+            enterpriseSupply++;
+        } else {
+            operatorSupply++;
         }
 
         uint256 tokenId = ++_nextTokenId;
@@ -114,14 +122,17 @@ contract OperatorNFT is ERC721, Ownable {
 
     /**
      * @notice O(1) access check.
+     * @param operator Wallet being evaluated for tier-gated access.
+     * @param minTier Minimum tier required for access.
+     * @return True when the wallet satisfies the requested minimum tier.
      */
     function hasAccess(address operator, uint8 minTier) external view returns (bool) {
-        if (minTier <= TIER_FREE) return true;
+        if (minTier <= TIER_OPERATOR) return true;
         return highestTier[operator] >= minTier;
     }
 
-    function tokensOfOwner(address owner) external view returns (uint256[] memory) {
-        return _ownedTokens[owner];
+    function tokensOfOwner(address holder) external view returns (uint256[] memory) {
+        return _ownedTokens[holder];
     }
 
     function isSoulbound(uint256 tokenId) external view returns (bool) {
@@ -152,17 +163,20 @@ contract OperatorNFT is ERC721, Ownable {
     // ─────────────────────────────────────────────────────────────────────────
 
     function burn(uint256 tokenId) external {
-        address owner = _ownerOf(tokenId);
-        require(owner != address(0), "Token does not exist");
-        require(_isAuthorized(owner, msg.sender, tokenId), "Not authorized");
+        address tokenOwner = _ownerOf(tokenId);
+        require(tokenOwner != address(0), "Token does not exist");
+        require(_isAuthorized(tokenOwner, msg.sender, tokenId), "Not authorized");
+        require(!_soulbound[tokenId], "Soulbound: burn disabled");
 
         uint8 tier = _tier[tokenId];
 
         totalSupply--;
         if (tier == TIER_PRO) {
             proSupply--;
-        } else if (tier == TIER_INSTITUTIONAL) {
-            institutionalSupply--;
+        } else if (tier == TIER_ENTERPRISE) {
+            enterpriseSupply--;
+        } else {
+            operatorSupply--;
         }
 
         _burn(tokenId);
@@ -216,49 +230,50 @@ contract OperatorNFT is ERC721, Ownable {
     // Internal helpers
     // ─────────────────────────────────────────────────────────────────────────
 
-    function _removeFromOwnerTokens(address owner, uint256 tokenId) private {
+    function _removeFromOwnerTokens(address holder, uint256 tokenId) private {
         uint256 idx = _ownedTokensIndex[tokenId];
-        uint256 last = _ownedTokens[owner].length - 1;
+        uint256 last = _ownedTokens[holder].length - 1;
 
         if (idx != last) {
-            uint256 lastToken = _ownedTokens[owner][last];
-            _ownedTokens[owner][idx] = lastToken;
+            uint256 lastToken = _ownedTokens[holder][last];
+            _ownedTokens[holder][idx] = lastToken;
             _ownedTokensIndex[lastToken] = idx;
         }
 
-        _ownedTokens[owner].pop();
+        _ownedTokens[holder].pop();
         delete _ownedTokensIndex[tokenId];
     }
 
-    function _incrementTier(address owner, uint8 tier) private {
-        _tierBalances[owner][tier] += 1;
-        if (tier > highestTier[owner]) {
-            highestTier[owner] = tier;
+    function _incrementTier(address holder, uint8 tier) private {
+        _tierBalances[holder][tier] += 1;
+        if (tier > highestTier[holder]) {
+            highestTier[holder] = tier;
         }
     }
 
-    function _decrementTier(address owner, uint8 tier) private {
-        uint256 current = _tierBalances[owner][tier];
+    function _decrementTier(address holder, uint8 tier) private {
+        uint256 current = _tierBalances[holder][tier];
         if (current > 0) {
-            _tierBalances[owner][tier] = current - 1;
+            _tierBalances[holder][tier] = current - 1;
         }
 
-        if (highestTier[owner] == tier && _tierBalances[owner][tier] == 0) {
-            if (_tierBalances[owner][TIER_INSTITUTIONAL] > 0) {
-                highestTier[owner] = TIER_INSTITUTIONAL;
-            } else if (_tierBalances[owner][TIER_PRO] > 0) {
-                highestTier[owner] = TIER_PRO;
-            } else if (_tierBalances[owner][TIER_FREE] > 0) {
-                highestTier[owner] = TIER_FREE;
+        if (highestTier[holder] == tier && _tierBalances[holder][tier] == 0) {
+            if (_tierBalances[holder][TIER_ENTERPRISE] > 0) {
+                highestTier[holder] = TIER_ENTERPRISE;
+            } else if (_tierBalances[holder][TIER_PRO] > 0) {
+                highestTier[holder] = TIER_PRO;
+            } else if (_tierBalances[holder][TIER_OPERATOR] > 0) {
+                highestTier[holder] = TIER_OPERATOR;
             } else {
-                highestTier[owner] = 0;
+                highestTier[holder] = 0;
             }
         }
     }
 
+    // Tier names for on-chain metadata
     function _tierName(uint8 tier) private pure returns (string memory) {
-        if (tier == TIER_INSTITUTIONAL) return "Institutional";
+        if (tier == TIER_ENTERPRISE) return "Enterprise";
         if (tier == TIER_PRO) return "Pro";
-        return "Free";
+        return "Operator";
     }
 }

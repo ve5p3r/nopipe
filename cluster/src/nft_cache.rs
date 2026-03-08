@@ -1,11 +1,11 @@
 use alloy::primitives::Address;
 use alloy::providers::{Provider, ProviderBuilder, WsConnect};
 use alloy::rpc::types::Filter;
-use dashmap::DashMap;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
-use std::time::{Duration, Instant};
 use anyhow::Result;
+use dashmap::DashMap;
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tracing::{info, warn};
 
 #[derive(Clone, Debug)]
@@ -53,7 +53,11 @@ impl NftVerificationCache {
 
     fn read_if_fresh(&self, wallet: Address) -> Option<u8> {
         self.entries.get(&wallet).and_then(|e| {
-            if Instant::now() < e.expires_at { Some(e.tier) } else { None }
+            if Instant::now() < e.expires_at {
+                Some(e.tier)
+            } else {
+                None
+            }
         })
     }
 
@@ -68,22 +72,27 @@ impl NftVerificationCache {
         let mut calldata = selector.to_vec();
         calldata.extend_from_slice(&addr_param);
 
-        let result = provider.call(
-            alloy::rpc::types::TransactionRequest::default()
-                .to(self.nft_contract)
-                .input(alloy::primitives::Bytes::from(calldata).into()),
-        ).await?;
+        let result = provider
+            .call(
+                alloy::rpc::types::TransactionRequest::default()
+                    .to(self.nft_contract)
+                    .input(alloy::primitives::Bytes::from(calldata).into()),
+            )
+            .await?;
 
         let tier = if result.len() >= 32 { result[31] } else { 0u8 };
         Ok((tier, block))
     }
 
     fn upsert_entry(&self, wallet: Address, tier: u8, block: u64) {
-        self.entries.insert(wallet, CacheEntry {
-            tier,
-            expires_at: Instant::now() + self.ttl,
-            fetched_at_block: block,
-        });
+        self.entries.insert(
+            wallet,
+            CacheEntry {
+                tier,
+                expires_at: Instant::now() + self.ttl,
+                fetched_at_block: block,
+            },
+        );
     }
 
     pub async fn get_tier(&self, wallet: Address) -> Result<u8> {
@@ -113,7 +122,11 @@ impl NftVerificationCache {
             hits: self.hits.load(Ordering::Relaxed),
             misses: self.misses.load(Ordering::Relaxed),
             invalidations: self.invalidations.load(Ordering::Relaxed),
-            avg_cold_ms: if count > 0 { total_ms as f64 / count as f64 } else { 0.0 },
+            avg_cold_ms: if count > 0 {
+                total_ms as f64 / count as f64
+            } else {
+                0.0
+            },
         }
     }
 
@@ -140,9 +153,13 @@ impl NftVerificationCache {
         while let Some(log) = stream.next().await {
             if log.topics().len() >= 3 {
                 let from = Address::from_slice(&log.topics()[1][12..]);
-                let to   = Address::from_slice(&log.topics()[2][12..]);
-                if from != Address::ZERO { self.invalidate_wallet(from); }
-                if to   != Address::ZERO { self.invalidate_wallet(to); }
+                let to = Address::from_slice(&log.topics()[2][12..]);
+                if from != Address::ZERO {
+                    self.invalidate_wallet(from);
+                }
+                if to != Address::ZERO {
+                    self.invalidate_wallet(to);
+                }
             }
         }
         Ok(())
@@ -166,11 +183,14 @@ mod tests {
     fn ttl_expiry_returns_none() {
         let cache = make_cache();
         let wallet = Address::repeat_byte(1);
-        cache.entries.insert(wallet, CacheEntry {
-            tier: 2,
-            expires_at: Instant::now() - Duration::from_secs(1),
-            fetched_at_block: 1,
-        });
+        cache.entries.insert(
+            wallet,
+            CacheEntry {
+                tier: 2,
+                expires_at: Instant::now() - Duration::from_secs(1),
+                fetched_at_block: 1,
+            },
+        );
         assert!(cache.read_if_fresh(wallet).is_none());
     }
 

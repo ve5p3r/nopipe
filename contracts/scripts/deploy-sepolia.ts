@@ -6,6 +6,9 @@ const AERODROME_V2  = "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43";
 const UNISWAP_V2   = "0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24";
 const UNISWAP_V3   = "0x2626664c2603336E57B271c5C0b26F421741e481";
 
+// Base Sepolia USDC
+const USDC_SEPOLIA = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
+
 async function main() {
   const [deployer] = await ethers.getSigners();
   const feeRecipient = process.env.FEE_RECIPIENT || deployer.address;
@@ -28,7 +31,7 @@ async function main() {
   // 2. SubscriptionKeeper
   console.log("\nDeploying SubscriptionKeeper...");
   const SubscriptionKeeper = await ethers.getContractFactory("SubscriptionKeeper");
-  const keeper = await SubscriptionKeeper.deploy(swapExecutorAddr, feeRecipient);
+  const keeper = await SubscriptionKeeper.deploy(USDC_SEPOLIA, feeRecipient);
   await keeper.waitForDeployment();
   const keeperAddr = await keeper.getAddress();
   console.log("SubscriptionKeeper:", keeperAddr, "| tx:", keeper.deploymentTransaction()?.hash);
@@ -36,11 +39,7 @@ async function main() {
   // 3. OperatorNFT
   console.log("\nDeploying OperatorNFT...");
   const OperatorNFT = await ethers.getContractFactory("OperatorNFT");
-  const nft = await OperatorNFT.deploy(
-    "Polyclaw Operator License",
-    "PCLW",
-    "https://polyclaw.xyz/metadata/"
-  );
+  const nft = await OperatorNFT.deploy();
   await nft.waitForDeployment();
   const nftAddr = await nft.getAddress();
   console.log("OperatorNFT:", nftAddr, "| tx:", nft.deploymentTransaction()?.hash);
@@ -65,11 +64,12 @@ async function main() {
       OperatorNFT: {
         address: nftAddr,
         txHash: nft.deploymentTransaction()?.hash,
-        args: { name: "Polyclaw Operator License", symbol: "PCLW" }
+        args: {}
       }
     }
   };
 
+  fs.mkdirSync(path.join(__dirname, "../deployments"), { recursive: true });
   const outPath = path.join(__dirname, "../deployments/84532.json");
   fs.writeFileSync(outPath, JSON.stringify(deployment, null, 2));
   console.log("\nDeployment saved to deployments/84532.json");

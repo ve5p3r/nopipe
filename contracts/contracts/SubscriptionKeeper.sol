@@ -89,7 +89,7 @@ contract SubscriptionKeeper is Ownable, Pausable, ReentrancyGuard {
         ONE_STABLE = 10 ** IERC20Metadata(stable).decimals();
     }
 
-    receive() external payable {}
+    // No ETH receive — this contract only handles ERC20 tokens.
 
     // ─────────────────────────────────────────────────────────────────────────
     // Budget authorization
@@ -99,7 +99,7 @@ contract SubscriptionKeeper is Ownable, Pausable, ReentrancyGuard {
      * @notice Agent authorizes per-cycle spend ceiling and number of cycles.
      * @dev cyclesRemaining = type(uint256).max means unlimited cycles.
      */
-    function authorizeBudget(uint256 maxPerCycle, uint256 cyclesRemaining) external {
+    function authorizeBudget(uint256 maxPerCycle, uint256 cyclesRemaining) external nonReentrant {
         require(maxPerCycle > 0, "Zero budget");
 
         _budgets[msg.sender] = BudgetAuth({
@@ -119,13 +119,13 @@ contract SubscriptionKeeper is Ownable, Pausable, ReentrancyGuard {
     // Owner configuration
     // ─────────────────────────────────────────────────────────────────────────
 
-    function setPool(address pool, uint256 price, uint256 limit) external onlyOwner {
+    function setPool(address pool, uint256 price, uint256 limit) external nonReentrant onlyOwner {
         PLAN[pool] = price;
         PLAN_LEFT[pool] = limit;
         PLAN_LIMIT[pool] = limit;
     }
 
-    function setFeeRecipient(address _feeRecipient) external onlyOwner {
+    function setFeeRecipient(address _feeRecipient) external nonReentrant onlyOwner {
         require(_feeRecipient != address(0), "Zero address");
         feeRecipient = _feeRecipient;
         emit FeeRecipientUpdated(_feeRecipient);
@@ -140,7 +140,7 @@ contract SubscriptionKeeper is Ownable, Pausable, ReentrancyGuard {
         address router,
         address[] calldata path,
         uint256 sellFeeBps
-    ) external onlyOwner {
+    ) external nonReentrant onlyOwner {
         require(agent != address(0), "Zero agent");
         require(router != address(0), "Zero router");
         require(path.length >= 2 && path[path.length - 1] == STABLE, "Bad path");
@@ -175,7 +175,7 @@ contract SubscriptionKeeper is Ownable, Pausable, ReentrancyGuard {
         emit Subscribed(agent, pool, PLAN[pool]);
     }
 
-    function stopRenewal(bool state) external {
+    function stopRenewal(bool state) external nonReentrant {
         require(_subs[msg.sender].agent != address(0), "No sub");
         _subs[msg.sender].stop = state;
     }
@@ -263,7 +263,7 @@ contract SubscriptionKeeper is Ownable, Pausable, ReentrancyGuard {
                 minOut,
                 sub.path,
                 address(this),
-                block.timestamp
+                block.timestamp + 300
             ) {
                 (uint256 stableAfter, bool stableAfterOk) = _safeBalanceOf(STABLE, address(this));
                 if (!stableAfterOk || stableAfter < stableBefore) {
