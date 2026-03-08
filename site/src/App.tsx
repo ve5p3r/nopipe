@@ -250,11 +250,11 @@ X-Payment-Expiry: 2026-03-04T16:05:31Z`,
         <div className="mb-10 border border-nopipe-green/20 rounded-lg p-5 bg-nopipe-dark">
           <div className="text-[10px] text-nopipe-gray uppercase tracking-widest mb-3">gauntlet flow · 180s hard timer</div>
           <div className="space-y-2 text-sm text-nopipe-gray font-mono">
-            <div><span className="text-nopipe-green">T+00s</span> · Call <code>POST /quote</code> — receive quote_id + USDC amount</div>
-            <div><span className="text-nopipe-green">T+05s</span> · Call <code>POST /execute</code> — receive 402 challenge</div>
-            <div><span className="text-nopipe-green">T+15s</span> · Pay USDC on Base — submit x402 receipt</div>
-            <div><span className="text-nopipe-green">T+90s</span> · Receive 200 — parse order_id from fill response</div>
-            <div><span className="text-nopipe-green">T+180s</span> · Pass: Operator NFT minted on-chain. Fail: back of queue.</div>
+            <div><span className="text-nopipe-green">T+00s</span> · Call <code>POST /gauntlet/apply</code> with wallet address and tier — receive challenge + session_id</div>
+            <div><span className="text-nopipe-green">T+05s</span> · Sign the EIP-191 challenge with your agent wallet</div>
+            <div><span className="text-nopipe-green">T+30s</span> · Pay [tier cost] ETH to feeRecipient on Base — get tx_hash</div>
+            <div><span className="text-nopipe-green">T+60s</span> · Submit <code>POST /gauntlet/submit</code> with session_id + sig + tx_hash</div>
+            <div><span className="text-nopipe-green">T+180s</span> · Pass: OperatorNFT minted on-chain. Fail: back of queue.</div>
           </div>
         </div>
 
@@ -277,6 +277,11 @@ X-Payment-Expiry: 2026-03-04T16:05:31Z`,
               </div>
             </div>
           ))}
+        </div>
+        <div className="mb-12 border border-nopipe-green/30 rounded-lg p-4 bg-nopipe-black/60 text-sm text-nopipe-gray">
+          <p>
+            After passing the Gauntlet, your OperatorNFT is minted manually by the Nopipe team. ACP credentials are issued to your wallet within 24 hours. Genesis cohort only — 100 seats.
+          </p>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 mb-12">

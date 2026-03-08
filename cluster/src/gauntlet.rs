@@ -29,6 +29,8 @@ pub struct GauntletConfig {
     pub fee_recipient: Address,
     pub chain_id: u64,
     pub db_path: String,
+    pub telegram_bot_token: Option<String>,
+    pub telegram_ops_chat_id: Option<i64>,
 }
 
 #[derive(Clone, Debug)]
@@ -100,6 +102,7 @@ struct SubmitRequest {
 struct DecisionResponse {
     decision: String,
     reason: String,
+    next_steps: String,
 }
 
 fn now_unix() -> u64 {
@@ -256,6 +259,8 @@ fn fail_response(reason: &str) -> axum::response::Response {
     Json(DecisionResponse {
         decision: "Fail".into(),
         reason: reason.into(),
+        next_steps: "Resolve the issue above and retry the Gauntlet before your session expires."
+            .into(),
     })
     .into_response()
 }
@@ -443,11 +448,23 @@ async fn post_submit(
             reason: "All steps passed".into(),
         },
     );
+    if let (Some(token), Some(chat_id)) = (
+        &state.config.telegram_bot_token,
+        state.config.telegram_ops_chat_id,
+    ) {
+        let msg = format!(
+            "✅ <b>Gauntlet PASS</b>\n\nWallet: <code>{wallet}</code>\nTier: {}\nTx: <code>{tx_hash}</code>\nTime: {}",
+            session.tier,
+            chrono::Utc::now().format("%Y-%m-%d %H:%M UTC")
+        );
+        crate::telegram::notify_ops(token, chat_id, &msg).await;
+    }
     state.remove_session(&session_id);
     info!("Gauntlet: PASS for {wallet}");
     Json(DecisionResponse {
         decision: "Pass".into(),
         reason: "All steps validated".into(),
+        next_steps: "Gauntlet passed. Your wallet has been recorded. The Nopipe team will mint your OperatorNFT and reach out via @NoPipeBot on Telegram within 24 hours.".into(),
     })
     .into_response()
 }

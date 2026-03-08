@@ -5,6 +5,7 @@ mod ofac;
 mod relayer;
 mod rpc_server;
 mod security;
+mod telegram;
 
 use anyhow::Result;
 use std::sync::Arc;
@@ -132,6 +133,10 @@ pub async fn run_cluster(cfg: ClusterConfig) -> Result<()> {
             fee_recipient: cfg.fee_recipient,
             chain_id: cfg.chain_id,
             db_path: cfg.sqlite_path.clone(),
+            telegram_bot_token: std::env::var("TELEGRAM_BOT_TOKEN").ok(),
+            telegram_ops_chat_id: std::env::var("TELEGRAM_OPS_CHAT_ID")
+                .ok()
+                .and_then(|s| s.parse().ok()),
         },
         sanctioned_evm_addresses,
     );
