@@ -13,6 +13,13 @@ use uuid::Uuid;
 use crate::relayer::rpc_with_fallback;
 use crate::security::verify_eip191_signature;
 
+/// Genesis seat caps per tier
+pub const TIER_SEAT_CAPS: [(u8, u32); 3] = [
+    (1, 7),   // Operator
+    (2, 10),  // Pro
+    (3, 8),   // Enterprise
+];
+
 /// Mint costs in wei per tier (Operator=1, Pro=2, Enterprise=3)
 pub const TIER_MINT_COST: [(u8, u128); 3] = [
     (1, 250_000_000_000_000_000),   // 0.25 ETH — Operator
@@ -60,6 +67,7 @@ pub struct GauntletState {
     sessions: Arc<DashMap<Uuid, GauntletSession>>,
     decisions: Arc<DashMap<Address, GauntletDecision>>,
     sanctioned_evm_addresses: Arc<RwLock<HashSet<Address>>>,
+    pass_counts: Arc<DashMap<u8, u32>>,
 }
 
 #[derive(Deserialize)]
@@ -88,6 +96,8 @@ struct ApplyResponse {
     deadline_unix: u64,
     tier: u8,
     payment: PaymentDetails,
+    seats_remaining: u32,
+    disclaimer: String,
 }
 
 #[derive(Deserialize)]
@@ -334,6 +344,21 @@ async fn post_apply(
     } else {
         1
     };
+
+    // Check seat availability
+    let remaining = state.seats_remaining(tier);
+    if remaining == 0 {
+        return (StatusCode::CONFLICT, Json(serde_json::json!({
+            "error": "tier_full",
+            "message": format!("{} tier is full ({} seats allocated). Try a different tier or join the waitlist.", tier_name(tier), TIER_SEAT_CAPS.iter().find(|(t,_)| *t == tier).map(|(_,c)| c).unwrap_or(&0)),
+            "seats": {
+                "operator": state.seats_remaining(1),
+                "pro": state.seats_remaining(2),
+                "enterprise": state.seats_remaining(3)
+            }
+        }))).into_response();
+    }
+
     let mint_cost_wei = GauntletState::tier_cost_wei(tier);
     let amount_eth = format!("{:.2}", mint_cost_wei as f64 / 1e18);
 
@@ -366,7 +391,8 @@ async fn post_apply(
         )
             .into_response();
     }
-    info!("Gauntlet: issued challenge for {wallet} tier={tier} cost={amount_eth}ETH deadline={deadline}");
+    let seats_left = state.seats_remaining(tier);
+    info!("Gauntlet: issued challenge for {wallet} tier={tier} cost={amount_eth}ETH deadline={deadline} seats_remaining={seats_left}");
     if let (Some(token), Some(chat_id)) = (
         &state.config.telegram_bot_token,
         state.config.telegram_ops_chat_id,
@@ -386,10 +412,18 @@ async fn post_apply(
         tier,
         payment: PaymentDetails {
             recipient: state.config.fee_recipient.to_string(),
-            amount_eth,
+            amount_eth: amount_eth.clone(),
             amount_wei: mint_cost_wei.to_string(),
             chain_id: state.config.chain_id,
         },
+        seats_remaining: seats_left,
+        disclaimer: format!(
+            "Genesis Gauntlet — {} tier. {} of {} seats remaining.              You have 180 seconds to sign, pay, and submit.              On pass, your seat is reserved and the OperatorNFT mint is queued automatically.              Payment ({} ETH) is non-refundable. This is not a token sale.",
+            tier_name(tier),
+            seats_left,
+            TIER_SEAT_CAPS.iter().find(|(t,_)| *t == tier).map(|(_,c)| c).unwrap_or(&0),
+            amount_eth,
+        ),
     })
     .into_response()
 }
@@ -525,6 +559,13 @@ async fn post_submit(
         tracing::info!("Genesis mode: skipping budget check for {wallet}");
     }
 
+    // Atomically claim the seat
+    let remaining = state.seats_remaining(session.tier);
+    if remaining == 0 {
+        return fail_response(&format!("{} tier filled while your challenge was in progress. Contact @NoPipeBot for next steps.", tier_name(session.tier)));
+    }
+    state.increment_pass_count(session.tier);
+
     state.persist_decision(
         wallet,
         GauntletDecision::Pass {
@@ -559,11 +600,16 @@ impl GauntletState {
         config: GauntletConfig,
         sanctioned_evm_addresses: Arc<RwLock<HashSet<Address>>>,
     ) -> Self {
+        let pass_counts = Arc::new(DashMap::new());
+        for (tier, _) in TIER_SEAT_CAPS {
+            pass_counts.insert(tier, 0);
+        }
         let state = Self {
             config,
             sessions: Arc::new(DashMap::new()),
             decisions: Arc::new(DashMap::new()),
             sanctioned_evm_addresses,
+            pass_counts,
         };
         if let Err(e) = state.init_db() {
             tracing::error!("Gauntlet DB init failed: {e}");
@@ -572,6 +618,19 @@ impl GauntletState {
             tracing::error!("Gauntlet DB restore failed: {e}");
         }
         state
+    }
+
+    pub fn seats_remaining(&self, tier: u8) -> u32 {
+        let cap = TIER_SEAT_CAPS.iter()
+            .find(|(t, _)| *t == tier)
+            .map(|(_, cap)| *cap)
+            .unwrap_or(0);
+        let used = self.pass_counts.get(&tier).map(|v| *v).unwrap_or(0);
+        cap.saturating_sub(used)
+    }
+
+    fn increment_pass_count(&self, tier: u8) {
+        self.pass_counts.entry(tier).and_modify(|c| *c += 1).or_insert(1);
     }
 
     pub fn tier_cost_wei(tier: u8) -> u128 {
