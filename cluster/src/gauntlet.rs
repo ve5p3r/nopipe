@@ -418,7 +418,7 @@ async fn post_apply(
         },
         seats_remaining: seats_left,
         disclaimer: format!(
-            "Genesis Gauntlet — {} tier. {} of {} seats remaining.              You have 180 seconds to sign, pay, and submit.              On pass, your seat is reserved and the OperatorNFT mint is queued automatically.              Payment ({} ETH) is non-refundable. This is not a token sale.",
+            "Genesis Gauntlet — {} tier. {} of {} seats remaining. You have 5 minutes to sign, pay, and submit. On pass, your seat activates instantly. Payment ({} ETH on Base) is non-refundable. This is not a token sale.",
             tier_name(tier),
             seats_left,
             TIER_SEAT_CAPS.iter().find(|(t,_)| *t == tier).map(|(_,c)| c).unwrap_or(&0),
