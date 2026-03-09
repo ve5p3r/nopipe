@@ -15,9 +15,9 @@ use crate::security::verify_eip191_signature;
 
 /// Genesis seat caps per tier
 pub const TIER_SEAT_CAPS: [(u8, u32); 3] = [
-    (1, 7),   // Operator
-    (2, 10),  // Pro
-    (3, 8),   // Enterprise
+    (1, 45),  // Operator
+    (2, 35),  // Pro
+    (3, 20),  // Enterprise
 ];
 
 /// Mint costs in wei per tier (Operator=1, Pro=2, Enterprise=3)
