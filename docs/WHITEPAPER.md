@@ -235,6 +235,7 @@ What we won't do is build attestation-based reputation. Execution quality is mea
 
 - Gauntlet leaderboard with 90-day rolling window
 - Five-dimension execution scoring (latency, success rate, gas efficiency, SLA compliance, nonce hygiene)
+- See [Execution Policy](EXECUTION-POLICY.md) for retry logic, failure codes, and SLA.
 - On-chain score publication (opt-in attribution)
 - Public API for agents to query operator execution reputation
 - BlindOracle's announced roadmap overlaps in concept — on-chain agent reputation — but diverges in signal. They score prediction accuracy. We score execution quality. Both needed. We're building ours.

@@ -1,6 +1,4 @@
 use alloy::primitives::{Address, B256, U256};
-use alloy::providers::{Provider, ProviderBuilder};
-use alloy::rpc::types::TransactionRequest;
 use axum::{extract::State, http::StatusCode, response::IntoResponse, routing::post, Json, Router};
 use dashmap::DashMap;
 use rusqlite::{params, Connection};
@@ -12,6 +10,7 @@ use tokio::sync::RwLock;
 use tracing::info;
 use uuid::Uuid;
 
+use crate::relayer::rpc_with_fallback;
 use crate::security::verify_eip191_signature;
 
 /// Mint costs in wei per tier (Operator=1, Pro=2, Enterprise=3)
@@ -25,6 +24,7 @@ pub const TIER_MINT_COST: [(u8, u128); 3] = [
 pub struct GauntletConfig {
     pub challenge_ttl_secs: u64,
     pub base_rpc_http: String,
+    pub base_rpc_http_fallback: Option<String>,
     pub subscription_keeper: Address,
     pub fee_recipient: Address,
     pub chain_id: u64,
@@ -118,28 +118,26 @@ pub fn build_challenge_message(wallet: Address, session_id: Uuid, issued_at: u64
 
 async fn verify_eth_payment(
     rpc_http: &str,
+    fallback_rpc: Option<String>,
     tx_hash: B256,
     expected_to: Address,
     min_value_wei: u128,
     window_start: u64,
     window_end: u64,
 ) -> anyhow::Result<()> {
-    // Use raw JSON-RPC to avoid alloy version fragility on tx field access
-    let client = reqwest::Client::new();
     let tx_hex = format!("{tx_hash:#x}");
 
     // eth_getTransactionByHash
-    let resp = client
-        .post(rpc_http)
-        .json(&serde_json::json!({
+    let resp = rpc_with_fallback(
+        rpc_http,
+        fallback_rpc.as_deref(),
+        serde_json::json!({
             "jsonrpc": "2.0", "id": 1,
             "method": "eth_getTransactionByHash",
             "params": [tx_hex]
-        }))
-        .send()
-        .await?
-        .json::<serde_json::Value>()
-        .await?;
+        }),
+    )
+    .await?;
 
     let tx = resp["result"]
         .as_object()
@@ -169,17 +167,16 @@ async fn verify_eth_payment(
     }
 
     // eth_getTransactionReceipt — check status + block timestamp
-    let rcpt_resp = client
-        .post(rpc_http)
-        .json(&serde_json::json!({
+    let rcpt_resp = rpc_with_fallback(
+        rpc_http,
+        fallback_rpc.as_deref(),
+        serde_json::json!({
             "jsonrpc": "2.0", "id": 2,
             "method": "eth_getTransactionReceipt",
             "params": [tx_hex]
-        }))
-        .send()
-        .await?
-        .json::<serde_json::Value>()
-        .await?;
+        }),
+    )
+    .await?;
 
     let rcpt = rcpt_resp["result"]
         .as_object()
@@ -197,17 +194,16 @@ async fn verify_eth_payment(
     let block_num = u64::from_str_radix(block_hex.trim_start_matches("0x"), 16).unwrap_or(0);
 
     // eth_getBlockByNumber for timestamp
-    let blk_resp = client
-        .post(rpc_http)
-        .json(&serde_json::json!({
+    let blk_resp = rpc_with_fallback(
+        rpc_http,
+        fallback_rpc.as_deref(),
+        serde_json::json!({
             "jsonrpc": "2.0", "id": 3,
             "method": "eth_getBlockByNumber",
             "params": [format!("0x{block_num:x}"), false]
-        }))
-        .send()
-        .await?
-        .json::<serde_json::Value>()
-        .await?;
+        }),
+    )
+    .await?;
 
     let blk = blk_resp["result"]
         .as_object()
@@ -229,22 +225,36 @@ async fn verify_eth_payment(
 
 async fn verify_budget_authorized(
     rpc_http: &str,
+    fallback_rpc: Option<String>,
     keeper: Address,
     wallet: Address,
 ) -> anyhow::Result<()> {
-    let provider = ProviderBuilder::new().connect_http(rpc_http.parse().unwrap());
     let selector = &alloy::primitives::keccak256(b"getBudget(address)")[..4];
     let mut addr = [0u8; 32];
     addr[12..].copy_from_slice(wallet.as_slice());
     let mut calldata = selector.to_vec();
     calldata.extend_from_slice(&addr);
-    let result = provider
-        .call(
-            TransactionRequest::default()
-                .to(keeper)
-                .input(alloy::primitives::Bytes::from(calldata).into()),
-        )
-        .await?;
+    let call_result = rpc_with_fallback(
+        rpc_http,
+        fallback_rpc.as_deref(),
+        serde_json::json!({
+            "jsonrpc": "2.0", "id": 4,
+            "method": "eth_call",
+            "params": [
+                {
+                    "to": keeper.to_string(),
+                    "data": format!("0x{}", hex::encode(&calldata))
+                },
+                "latest"
+            ]
+        }),
+    )
+    .await?;
+    let result_hex = call_result["result"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("eth_call missing result"))?;
+    let result_hex = result_hex.trim_start_matches("0x");
+    let result = hex::decode(result_hex).map_err(|e| anyhow::anyhow!("Invalid eth_call hex: {e}"))?;
     if result.len() < 32 {
         return Err(anyhow::anyhow!("getBudget returned empty"));
     }
@@ -409,6 +419,7 @@ async fn post_submit(
     };
     if let Err(e) = verify_eth_payment(
         &state.config.base_rpc_http,
+        state.config.base_rpc_http_fallback.clone(),
         tx_hash,
         state.config.fee_recipient,
         session.mint_cost_wei,
@@ -428,6 +439,7 @@ async fn post_submit(
 
     if let Err(e) = verify_budget_authorized(
         &state.config.base_rpc_http,
+        state.config.base_rpc_http_fallback.clone(),
         state.config.subscription_keeper,
         wallet,
     )

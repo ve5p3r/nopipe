@@ -4,15 +4,82 @@ use alloy::providers::{Provider, ProviderBuilder};
 use alloy::rpc::types::{TransactionReceipt, TransactionRequest};
 use alloy::signers::local::PrivateKeySigner;
 use anyhow::{anyhow, Result};
+use reqwest::StatusCode;
 use rusqlite::{params, Connection};
+use serde_json::Value as JsonValue;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{Mutex, RwLock};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 // Pre-computed gas limit for tradeFor() — skips eth_estimateGas on every call.
 // Measured on Base mainnet; 20% headroom over typical ~200k gas.
 const TRADE_FOR_GAS_LIMIT: u64 = 250_000;
+
+enum RpcCallError {
+    Retryable(anyhow::Error),
+    Fatal(anyhow::Error),
+}
+
+async fn rpc_call(client: &reqwest::Client, rpc_url: &str, request: &JsonValue) -> Result<JsonValue, RpcCallError> {
+    let response = client.post(rpc_url).json(request).send().await.map_err(|e| {
+        if e.is_connect() || e.is_timeout() {
+            RpcCallError::Retryable(anyhow!("RPC request to {rpc_url} failed: {e}"))
+        } else {
+            RpcCallError::Fatal(anyhow!("RPC request to {rpc_url} failed: {e}"))
+        }
+    })?;
+
+    if response.status() == StatusCode::TOO_MANY_REQUESTS {
+        return Err(RpcCallError::Retryable(anyhow!(
+            "RPC request to {rpc_url} was rate-limited (429)"
+        )));
+    }
+    if !response.status().is_success() {
+        return Err(RpcCallError::Fatal(anyhow!(
+            "RPC request to {rpc_url} failed with status {}",
+            response.status()
+        )));
+    }
+
+    response
+        .json::<JsonValue>()
+        .await
+        .map_err(|e| RpcCallError::Fatal(anyhow!("Invalid JSON-RPC response from {rpc_url}: {e}")))
+}
+
+pub async fn rpc_with_fallback(
+    primary: &str,
+    fallback: Option<&str>,
+    request: JsonValue,
+) -> Result<JsonValue> {
+    let client = reqwest::Client::new();
+    match rpc_call(&client, primary, &request).await {
+        Ok(response) => {
+            debug!("rpc_with_fallback: using primary RPC {}", primary);
+            Ok(response)
+        }
+        Err(RpcCallError::Fatal(e)) => Err(e),
+        Err(RpcCallError::Retryable(primary_err)) => {
+            let Some(fallback_url) = fallback else {
+                return Err(primary_err);
+            };
+            debug!(
+                "rpc_with_fallback: primary {} failed with retryable error, trying fallback {}",
+                primary, fallback_url
+            );
+            match rpc_call(&client, fallback_url, &request).await {
+                Ok(response) => {
+                    debug!("rpc_with_fallback: using fallback RPC {}", fallback_url);
+                    Ok(response)
+                }
+                Err(RpcCallError::Retryable(e)) | Err(RpcCallError::Fatal(e)) => Err(anyhow!(
+                    "Primary RPC failed: {primary_err}; fallback RPC failed: {e}"
+                )),
+            }
+        }
+    }
+}
 
 pub struct RelayerConfig {
     pub rpc_http: String,

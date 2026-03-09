@@ -15,6 +15,7 @@ use tokio::sync::RwLock;
 pub struct ClusterConfig {
     pub bind_addr: String,
     pub base_rpc_http: String,
+    pub base_rpc_http_fallback: Option<String>,
     pub base_rpc_ws: String,
     pub chain_id: u64,
     pub swap_executor: alloy::primitives::Address,
@@ -36,6 +37,7 @@ async fn main() -> Result<()> {
     let cfg = ClusterConfig {
         bind_addr: std::env::var("BIND_ADDR").unwrap_or("0.0.0.0:9000".into()),
         base_rpc_http: std::env::var("BASE_RPC_HTTP").expect("BASE_RPC_HTTP required"),
+        base_rpc_http_fallback: std::env::var("BASE_RPC_HTTP_FALLBACK").ok(),
         base_rpc_ws: std::env::var("BASE_RPC_WS").expect("BASE_RPC_WS required"),
         chain_id: std::env::var("CHAIN_ID").unwrap_or("1".into()).parse()?,
         swap_executor: std::env::var("SWAP_EXECUTOR")
@@ -129,6 +131,7 @@ pub async fn run_cluster(cfg: ClusterConfig) -> Result<()> {
         gauntlet::GauntletConfig {
             challenge_ttl_secs: 180,
             base_rpc_http: cfg.base_rpc_http.clone(),
+            base_rpc_http_fallback: cfg.base_rpc_http_fallback.clone(),
             subscription_keeper: cfg.subscription_keeper,
             fee_recipient: cfg.fee_recipient,
             chain_id: cfg.chain_id,
