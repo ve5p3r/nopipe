@@ -31,6 +31,7 @@ pub struct GauntletConfig {
     pub db_path: String,
     pub telegram_bot_token: Option<String>,
     pub telegram_ops_chat_id: Option<i64>,
+    pub genesis_mode: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -491,32 +492,37 @@ async fn post_submit(
         return fail_response(&format!("Payment invalid: {e}"));
     }
 
-    if let Err(e) = verify_budget_authorized(
-        &state.config.base_rpc_http,
-        state.config.base_rpc_http_fallback.clone(),
-        state.config.subscription_keeper,
-        wallet,
-    )
-    .await
-    {
-        state.persist_decision(
+    // In genesis mode, skip budget authorization (contracts not yet deployed)
+    if !state.config.genesis_mode {
+        if let Err(e) = verify_budget_authorized(
+            &state.config.base_rpc_http,
+            state.config.base_rpc_http_fallback.clone(),
+            state.config.subscription_keeper,
             wallet,
-            GauntletDecision::Fail {
-                reason: format!("Budget: {e}"),
-            },
-        );
-        if let (Some(token), Some(chat_id)) = (
-            &state.config.telegram_bot_token,
-            state.config.telegram_ops_chat_id,
-        ) {
-            let msg = format!(
-                "❌ <b>Gauntlet FAIL</b> — budget\n\nWallet: <code>{wallet}</code>\nTier: {}\nReason: {e}\nTime: {}",
-                tier_name(session.tier),
-                chrono::Utc::now().format("%Y-%m-%d %H:%M UTC")
+        )
+        .await
+        {
+            state.persist_decision(
+                wallet,
+                GauntletDecision::Fail {
+                    reason: format!("Budget: {e}"),
+                },
             );
-            crate::telegram::notify_ops(token, chat_id, &msg).await;
+            if let (Some(token), Some(chat_id)) = (
+                &state.config.telegram_bot_token,
+                state.config.telegram_ops_chat_id,
+            ) {
+                let msg = format!(
+                    "❌ <b>Gauntlet FAIL</b> — budget\n\nWallet: <code>{wallet}</code>\nTier: {}\nReason: {e}\nTime: {}",
+                    tier_name(session.tier),
+                    chrono::Utc::now().format("%Y-%m-%d %H:%M UTC")
+                );
+                crate::telegram::notify_ops(token, chat_id, &msg).await;
+            }
+            return fail_response(&format!("Budget not authorized: {e}"));
         }
-        return fail_response(&format!("Budget not authorized: {e}"));
+    } else {
+        tracing::info!("Genesis mode: skipping budget check for {wallet}");
     }
 
     state.persist_decision(

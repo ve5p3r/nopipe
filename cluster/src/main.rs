@@ -28,37 +28,71 @@ pub struct ClusterConfig {
     pub keeper_interval_secs: u64,
     pub min_swap_tier: u8,
     pub sqlite_path: String,
+    pub genesis_mode: bool,
+}
+
+fn parse_addr_or_zero(var: &str) -> alloy::primitives::Address {
+    std::env::var(var)
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(alloy::primitives::Address::ZERO)
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
+    let genesis_mode = std::env::var("GENESIS_MODE")
+        .unwrap_or_default()
+        .eq_ignore_ascii_case("true");
+
+    if genesis_mode {
+        tracing::info!("🔥 GENESIS MODE — contract checks disabled, Gauntlet-only operation");
+    }
+
     let cfg = ClusterConfig {
         bind_addr: std::env::var("BIND_ADDR").unwrap_or("0.0.0.0:9000".into()),
         base_rpc_http: std::env::var("BASE_RPC_HTTP").expect("BASE_RPC_HTTP required"),
         base_rpc_http_fallback: std::env::var("BASE_RPC_HTTP_FALLBACK").ok(),
-        base_rpc_ws: std::env::var("BASE_RPC_WS").expect("BASE_RPC_WS required"),
-        chain_id: std::env::var("CHAIN_ID").unwrap_or("1".into()).parse()?,
-        swap_executor: std::env::var("SWAP_EXECUTOR")
-            .expect("SWAP_EXECUTOR required")
-            .parse()?,
-        subscription_keeper: std::env::var("SUBSCRIPTION_KEEPER")
-            .expect("SUBSCRIPTION_KEEPER required")
-            .parse()?,
-        operator_nft: std::env::var("OPERATOR_NFT")
-            .expect("OPERATOR_NFT required")
-            .parse()?,
-        relayer_private_key: std::env::var("RELAYER_PRIVATE_KEY")
-            .expect("RELAYER_PRIVATE_KEY required"),
+        base_rpc_ws: std::env::var("BASE_RPC_WS").unwrap_or_else(|_| {
+            if genesis_mode {
+                String::new()
+            } else {
+                panic!("BASE_RPC_WS required (set GENESIS_MODE=true to skip)")
+            }
+        }),
+        chain_id: std::env::var("CHAIN_ID").unwrap_or("8453".into()).parse()?,
+        swap_executor: if genesis_mode {
+            parse_addr_or_zero("SWAP_EXECUTOR")
+        } else {
+            std::env::var("SWAP_EXECUTOR").expect("SWAP_EXECUTOR required").parse()?
+        },
+        subscription_keeper: if genesis_mode {
+            parse_addr_or_zero("SUBSCRIPTION_KEEPER")
+        } else {
+            std::env::var("SUBSCRIPTION_KEEPER").expect("SUBSCRIPTION_KEEPER required").parse()?
+        },
+        operator_nft: if genesis_mode {
+            parse_addr_or_zero("OPERATOR_NFT")
+        } else {
+            std::env::var("OPERATOR_NFT").expect("OPERATOR_NFT required").parse()?
+        },
+        relayer_private_key: std::env::var("RELAYER_PRIVATE_KEY").unwrap_or_else(|_| {
+            if genesis_mode {
+                String::new()
+            } else {
+                panic!("RELAYER_PRIVATE_KEY required (set GENESIS_MODE=true to skip)")
+            }
+        }),
         fee_recipient: std::env::var("FEE_RECIPIENT")
             .expect("FEE_RECIPIENT required")
             .parse()?,
-        min_relayer_balance_wei: alloy::primitives::U256::from(50_000_000_000_000_000u64), // 0.05 ETH
+        min_relayer_balance_wei: alloy::primitives::U256::from(50_000_000_000_000_000u64),
         nft_cache_ttl_secs: 300,
         keeper_interval_secs: 60,
         min_swap_tier: 1,
-        sqlite_path: std::env::var("SQLITE_PATH").unwrap_or("polyclaw_state.sqlite".into()),
+        sqlite_path: std::env::var("SQLITE_PATH").unwrap_or("nopipe_state.sqlite".into()),
+        genesis_mode,
     };
 
     run_cluster(cfg).await
@@ -67,7 +101,11 @@ async fn main() -> Result<()> {
 pub async fn run_cluster(cfg: ClusterConfig) -> Result<()> {
     let nft_cache = Arc::new(nft_cache::NftVerificationCache::new(
         cfg.base_rpc_http.clone(),
-        cfg.base_rpc_ws.clone(),
+        if cfg.genesis_mode && cfg.base_rpc_ws.is_empty() {
+            cfg.base_rpc_http.clone()
+        } else {
+            cfg.base_rpc_ws.clone()
+        },
         cfg.operator_nft,
         std::time::Duration::from_secs(cfg.nft_cache_ttl_secs),
     ));
@@ -96,20 +134,25 @@ pub async fn run_cluster(cfg: ClusterConfig) -> Result<()> {
         .await?,
     );
 
-    let cache_clone = nft_cache.clone();
-    tokio::spawn(async move {
-        if let Err(e) = cache_clone.start_invalidation_listener().await {
-            tracing::error!("NFT cache listener: {e}");
-        }
-    });
-    let keeper_clone = keeper.clone();
-    tokio::spawn(async move {
-        keeper_clone.start().await;
-    });
-    let relayer_clone = relayer.clone();
-    tokio::spawn(async move {
-        relayer_clone.start_gas_loop().await;
-    });
+    // In genesis mode, skip background services that depend on live contracts
+    if !cfg.genesis_mode {
+        let cache_clone = nft_cache.clone();
+        tokio::spawn(async move {
+            if let Err(e) = cache_clone.start_invalidation_listener().await {
+                tracing::error!("NFT cache listener: {e}");
+            }
+        });
+        let keeper_clone = keeper.clone();
+        tokio::spawn(async move {
+            keeper_clone.start().await;
+        });
+        let relayer_clone = relayer.clone();
+        tokio::spawn(async move {
+            relayer_clone.start_gas_loop().await;
+        });
+    } else {
+        tracing::info!("Genesis mode: skipping NFT cache listener, keeper, and relayer gas loop");
+    }
 
     let app_state = rpc_server::ClusterAppState {
         nft_cache,
@@ -140,6 +183,7 @@ pub async fn run_cluster(cfg: ClusterConfig) -> Result<()> {
             telegram_ops_chat_id: std::env::var("TELEGRAM_OPS_CHAT_ID")
                 .ok()
                 .and_then(|s| s.parse().ok()),
+            genesis_mode: cfg.genesis_mode,
         },
         sanctioned_evm_addresses,
     );
