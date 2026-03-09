@@ -44,7 +44,12 @@ impl KeeperService {
             consecutive_failures: Arc::new(AtomicU32::new(0)),
             last_cycle_block: Arc::new(AtomicU64::new(0)),
         };
-        svc.bootstrap_subscribers().await?;
+        // Skip bootstrap if start_block is u64::MAX (genesis mode — no contracts yet)
+        if svc.config.start_block != Some(u64::MAX) {
+            svc.bootstrap_subscribers().await?;
+        } else {
+            info!("Keeper: genesis mode — skipping bootstrap");
+        }
         Ok(svc)
     }
 

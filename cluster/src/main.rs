@@ -129,7 +129,8 @@ pub async fn run_cluster(cfg: ClusterConfig) -> Result<()> {
             rpc_http: cfg.base_rpc_http.clone(),
             subscription_keeper: cfg.subscription_keeper,
             poll_interval_secs: cfg.keeper_interval_secs,
-            start_block: None,
+            // Genesis mode: scan from "now" so bootstrap does zero eth_getLogs work
+            start_block: if cfg.genesis_mode { Some(u64::MAX) } else { None },
         })
         .await?,
     );
