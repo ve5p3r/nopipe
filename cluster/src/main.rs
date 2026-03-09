@@ -155,15 +155,6 @@ pub async fn run_cluster(cfg: ClusterConfig) -> Result<()> {
         tracing::info!("Genesis mode: skipping NFT cache listener, keeper, and relayer gas loop");
     }
 
-    let app_state = rpc_server::ClusterAppState {
-        nft_cache,
-        relayer,
-        keeper,
-        config: cfg.clone(),
-        nonce_store: Arc::new(security::NonceStore::default()),
-        swap_statuses: Arc::new(dashmap::DashMap::new()),
-    };
-
     let sanctioned_evm_addresses =
         Arc::new(RwLock::new(ofac::load_sanctioned_evm_addresses().await));
     let sanctioned_evm_addresses_clone = sanctioned_evm_addresses.clone();
@@ -173,7 +164,7 @@ pub async fn run_cluster(cfg: ClusterConfig) -> Result<()> {
 
     let gauntlet_state = gauntlet::GauntletState::new(
         gauntlet::GauntletConfig {
-            challenge_ttl_secs: 180,
+            challenge_ttl_secs: 300,  // 5 minute window
             base_rpc_http: cfg.base_rpc_http.clone(),
             base_rpc_http_fallback: cfg.base_rpc_http_fallback.clone(),
             subscription_keeper: cfg.subscription_keeper,
@@ -188,6 +179,23 @@ pub async fn run_cluster(cfg: ClusterConfig) -> Result<()> {
         },
         sanctioned_evm_addresses,
     );
+
+    // Share gauntlet decisions with RPC for genesis-mode operator checks
+    let gauntlet_decisions = if cfg.genesis_mode {
+        Some(gauntlet_state.decisions.clone())
+    } else {
+        None
+    };
+
+    let app_state = rpc_server::ClusterAppState {
+        nft_cache,
+        relayer,
+        keeper,
+        config: cfg.clone(),
+        nonce_store: Arc::new(security::NonceStore::default()),
+        swap_statuses: Arc::new(dashmap::DashMap::new()),
+        gauntlet_decisions,
+    };
 
     let app = rpc_server::build_full_router(app_state, gauntlet_state);
     let listener = tokio::net::TcpListener::bind(&cfg.bind_addr).await?;

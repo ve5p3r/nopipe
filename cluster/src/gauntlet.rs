@@ -57,7 +57,7 @@ struct GauntletSession {
 
 #[derive(Debug, Clone, Serialize)]
 pub enum GauntletDecision {
-    Pass { reason: String },
+    Pass { reason: String, tier: u8 },
     Fail { reason: String },
 }
 
@@ -65,7 +65,7 @@ pub enum GauntletDecision {
 pub struct GauntletState {
     config: GauntletConfig,
     sessions: Arc<DashMap<Uuid, GauntletSession>>,
-    decisions: Arc<DashMap<Address, GauntletDecision>>,
+    pub decisions: Arc<DashMap<Address, GauntletDecision>>,
     sanctioned_evm_addresses: Arc<RwLock<HashSet<Address>>>,
     pass_counts: Arc<DashMap<u8, u32>>,
 }
@@ -570,6 +570,7 @@ async fn post_submit(
         wallet,
         GauntletDecision::Pass {
             reason: "All steps passed".into(),
+            tier: session.tier,
         },
     );
     if let (Some(token), Some(chat_id)) = (

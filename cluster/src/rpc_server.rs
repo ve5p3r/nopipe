@@ -64,6 +64,7 @@ pub struct ClusterAppState {
     pub config: ClusterConfig,
     pub nonce_store: Arc<NonceStore>,
     pub swap_statuses: Arc<DashMap<String, SwapStatus>>,
+    pub gauntlet_decisions: Option<Arc<DashMap<Address, crate::gauntlet::GauntletDecision>>>,
 }
 
 #[derive(Deserialize)]
@@ -217,11 +218,26 @@ async fn handle_swap_execute(
     verify_eip191_signature(&message, &p.sig, wallet)
         .map_err(|e| rpc_err(ERR_AUTH_FAILED, format!("Sig invalid: {e}")))?;
 
-    let tier = state
-        .nft_cache
-        .get_tier(wallet)
-        .await
-        .map_err(|e| rpc_err(ERR_INTERNAL, format!("NFT cache: {e}")))?;
+    // Genesis mode: check Gauntlet decisions directly instead of NFT
+    let tier = if state.config.genesis_mode {
+        if let Some(ref decisions) = state.gauntlet_decisions {
+            match decisions.get(&wallet) {
+                Some(ref d) => match d.value() {
+                    crate::gauntlet::GauntletDecision::Pass { tier, .. } => *tier,
+                    _ => 0,
+                },
+                None => 0,
+            }
+        } else {
+            0
+        }
+    } else {
+        state
+            .nft_cache
+            .get_tier(wallet)
+            .await
+            .map_err(|e| rpc_err(ERR_INTERNAL, format!("NFT cache: {e}")))?
+    };
     if tier < state.config.min_swap_tier {
         return Err(rpc_err(
             ERR_ACCESS_DENIED,
@@ -366,12 +382,16 @@ async fn handle_health(State(state): State<ClusterAppState>) -> impl IntoRespons
     })
 }
 
-async fn handle_execute_gate() -> Response {
+async fn handle_execute_gate(State(state): State<ClusterAppState>) -> Response {
     (
         StatusCode::FORBIDDEN,
         Json(serde_json::json!({
             "error": "operator_required",
-            "message": "Nopipe requires an Operator NFT. Request admission via the Genesis Gauntlet.",
+            "message": if state.config.genesis_mode {
+                "Nopipe Genesis — 25 operator seats. Pass the Gauntlet to activate your seat."
+            } else {
+                "Nopipe requires an Operator NFT. Request admission via the Genesis Gauntlet."
+            },
             "gauntlet": "https://api.nopipe.io/gauntlet/apply"
         })),
     ).into_response()
