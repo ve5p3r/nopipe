@@ -275,6 +275,15 @@ fn fail_response(reason: &str) -> axum::response::Response {
     .into_response()
 }
 
+
+fn tier_name(tier: u8) -> &'static str {
+    match tier {
+        3 => "Enterprise",
+        2 => "Pro",
+        _ => "Operator",
+    }
+}
+
 async fn post_apply(
     State(state): State<GauntletState>,
     Json(req): Json<ApplyRequest>,
@@ -357,6 +366,18 @@ async fn post_apply(
             .into_response();
     }
     info!("Gauntlet: issued challenge for {wallet} tier={tier} cost={amount_eth}ETH deadline={deadline}");
+    if let (Some(token), Some(chat_id)) = (
+        &state.config.telegram_bot_token,
+        state.config.telegram_ops_chat_id,
+    ) {
+        let msg = format!(
+            "🎯 <b>Gauntlet APPLY</b>\n\nWallet: <code>{wallet}</code>\nTier: {} ({amount_eth} ETH)\nSession: <code>{session_id}</code>\nDeadline: +{}s\nTime: {}",
+            tier_name(tier),
+            state.config.challenge_ttl_secs,
+            chrono::Utc::now().format("%Y-%m-%d %H:%M UTC")
+        );
+        crate::telegram::notify_ops(token, chat_id, &msg).await;
+    }
     Json(ApplyResponse {
         session_id: session_id.to_string(),
         challenge,
@@ -397,6 +418,17 @@ async fn post_submit(
             },
         );
         state.remove_session(&session_id);
+        if let (Some(token), Some(chat_id)) = (
+            &state.config.telegram_bot_token,
+            state.config.telegram_ops_chat_id,
+        ) {
+            let msg = format!(
+                "⏱️ <b>Gauntlet TIMEOUT</b>\n\nWallet: <code>{wallet}</code>\nTier: {}\nTime: {}",
+                tier_name(session.tier),
+                chrono::Utc::now().format("%Y-%m-%d %H:%M UTC")
+            );
+            crate::telegram::notify_ops(token, chat_id, &msg).await;
+        }
         return fail_response("Challenge expired (>120s)");
     }
     if session.wallet != wallet {
@@ -410,6 +442,17 @@ async fn post_submit(
                 reason: format!("Bad sig: {e}"),
             },
         );
+        if let (Some(token), Some(chat_id)) = (
+            &state.config.telegram_bot_token,
+            state.config.telegram_ops_chat_id,
+        ) {
+            let msg = format!(
+                "❌ <b>Gauntlet FAIL</b> — bad sig\n\nWallet: <code>{wallet}</code>\nTier: {}\nReason: {e}\nTime: {}",
+                tier_name(session.tier),
+                chrono::Utc::now().format("%Y-%m-%d %H:%M UTC")
+            );
+            crate::telegram::notify_ops(token, chat_id, &msg).await;
+        }
         return fail_response(&format!("Invalid challenge signature: {e}"));
     }
 
@@ -434,6 +477,17 @@ async fn post_submit(
                 reason: format!("Payment: {e}"),
             },
         );
+        if let (Some(token), Some(chat_id)) = (
+            &state.config.telegram_bot_token,
+            state.config.telegram_ops_chat_id,
+        ) {
+            let msg = format!(
+                "❌ <b>Gauntlet FAIL</b> — payment\n\nWallet: <code>{wallet}</code>\nTier: {}\nReason: {e}\nTime: {}",
+                tier_name(session.tier),
+                chrono::Utc::now().format("%Y-%m-%d %H:%M UTC")
+            );
+            crate::telegram::notify_ops(token, chat_id, &msg).await;
+        }
         return fail_response(&format!("Payment invalid: {e}"));
     }
 
@@ -451,6 +505,17 @@ async fn post_submit(
                 reason: format!("Budget: {e}"),
             },
         );
+        if let (Some(token), Some(chat_id)) = (
+            &state.config.telegram_bot_token,
+            state.config.telegram_ops_chat_id,
+        ) {
+            let msg = format!(
+                "❌ <b>Gauntlet FAIL</b> — budget\n\nWallet: <code>{wallet}</code>\nTier: {}\nReason: {e}\nTime: {}",
+                tier_name(session.tier),
+                chrono::Utc::now().format("%Y-%m-%d %H:%M UTC")
+            );
+            crate::telegram::notify_ops(token, chat_id, &msg).await;
+        }
         return fail_response(&format!("Budget not authorized: {e}"));
     }
 
@@ -464,10 +529,12 @@ async fn post_submit(
         &state.config.telegram_bot_token,
         state.config.telegram_ops_chat_id,
     ) {
+        let tier_label = tier_name(session.tier);
         let msg = format!(
-            "✅ <b>Gauntlet PASS</b>\n\nWallet: <code>{wallet}</code>\nTier: {}\nTx: <code>{tx_hash}</code>\nTime: {}",
+            "✅ <b>Gauntlet PASS</b>\n\nWallet: <code>{wallet}</code>\nTier: {tier_label} ({})\nTx: <code>{tx_hash}</code>\nTime: {}\n\n<b>Mint action:</b>\n<code>/mint {wallet} {}</code>",
+            format!("{:.2} ETH", session.mint_cost_wei as f64 / 1e18),
+            chrono::Utc::now().format("%Y-%m-%d %H:%M UTC"),
             session.tier,
-            chrono::Utc::now().format("%Y-%m-%d %H:%M UTC")
         );
         crate::telegram::notify_ops(token, chat_id, &msg).await;
     }
