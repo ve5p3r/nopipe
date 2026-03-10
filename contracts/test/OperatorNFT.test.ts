@@ -51,7 +51,7 @@ describe("OperatorNFT", function () {
   it("non-owner cannot mint", async function () {
     await expect(
       nft.connect(user1).mint(user1.address, TIER_PRO, false)
-    ).to.be.revertedWithCustomError(nft, "OwnableUnauthorizedAccount");
+    ).to.be.revertedWith("Not authorized minter");
   });
 
   it("reverts on invalid tier", async function () {

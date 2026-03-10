@@ -17,7 +17,7 @@ import "@openzeppelin/contracts/utils/Strings.sol";
  *
  * Supply:
  *   MAX_SUPPLY = 200 (network capacity with direct servicing)
- *   GENESIS_SUPPLY = 25 (founding cohort, Gauntlet-gated)
+ *   GENESIS_SUPPLY = 100 (founding cohort, Gauntlet-gated)
  *
  * Core upgrades:
  * - O(1) access checks via highestTier mapping
@@ -35,7 +35,7 @@ contract OperatorNFT is ERC721, Ownable {
     uint256 public constant MAX_SUPPLY = 200;
     uint256 public constant MAX_PRO = 150;
     uint256 public constant MAX_ENTERPRISE = 50;
-    uint256 public constant GENESIS_SUPPLY = 25;
+    uint256 public constant GENESIS_SUPPLY = 100;
 
     uint256 public constant SOULBOUND_DAYS = 180;
 
@@ -53,6 +53,11 @@ contract OperatorNFT is ERC721, Ownable {
     // O(1) access primitive
     mapping(address => uint8) public highestTier;
 
+    // Approved minters (e.g., Gauntlet relayer for auto-mint)
+    mapping(address => bool) public approvedMinters;
+
+    event MinterUpdated(address indexed minter, bool approved);
+
     // Track per-tier counts per owner to support accurate highestTier updates on transfer/burn
     mapping(address => mapping(uint8 => uint256)) private _tierBalances;
 
@@ -65,10 +70,25 @@ contract OperatorNFT is ERC721, Ownable {
     constructor() ERC721("Nopipe Operator", "NPOP") Ownable(msg.sender) {}
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Minter role
+    // ─────────────────────────────────────────────────────────────────────────
+
+    modifier onlyMinter() {
+        require(msg.sender == owner() || approvedMinters[msg.sender], "Not authorized minter");
+        _;
+    }
+
+    function setMinter(address minter, bool approved) external onlyOwner {
+        require(minter != address(0), "Zero minter");
+        approvedMinters[minter] = approved;
+        emit MinterUpdated(minter, approved);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Minting
     // ─────────────────────────────────────────────────────────────────────────
 
-    function mint(address to, uint8 tier, bool soulbound_) external onlyOwner {
+    function mint(address to, uint8 tier, bool soulbound_) external onlyMinter {
         _mintInternal(to, tier, soulbound_);
     }
 
@@ -76,7 +96,7 @@ contract OperatorNFT is ERC721, Ownable {
      * @notice Batch mint for founding launch.
      * @dev Launch mints are soulbound by default.
      */
-    function batchMint(address[] calldata recipients, uint8[] calldata tiers) external onlyOwner {
+    function batchMint(address[] calldata recipients, uint8[] calldata tiers) external onlyMinter {
         require(recipients.length == tiers.length, "Length mismatch");
 
         for (uint256 i = 0; i < recipients.length; i++) {

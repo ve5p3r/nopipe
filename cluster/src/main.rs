@@ -176,6 +176,8 @@ pub async fn run_cluster(cfg: ClusterConfig) -> Result<()> {
                 .ok()
                 .and_then(|s| s.parse().ok()),
             genesis_mode: cfg.genesis_mode,
+            operator_nft_address: std::env::var("OPERATOR_NFT_ADDRESS").ok().and_then(|s| s.parse().ok()),
+            relayer_private_key: std::env::var("RELAYER_PRIVATE_KEY").ok().filter(|s| !s.is_empty()),
         },
         sanctioned_evm_addresses,
     );

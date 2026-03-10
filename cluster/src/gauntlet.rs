@@ -1,4 +1,9 @@
 use alloy::primitives::{Address, B256, U256};
+use tracing::warn;
+use alloy::providers::{Provider, ProviderBuilder};
+use alloy::signers::local::PrivateKeySigner;
+use alloy::network::EthereumWallet;
+use alloy::sol;
 use axum::{extract::State, http::StatusCode, response::IntoResponse, routing::post, Json, Router};
 use dashmap::DashMap;
 use rusqlite::{params, Connection};
@@ -27,6 +32,15 @@ pub const TIER_MINT_COST: [(u8, u128); 3] = [
     (3, 5_000_000_000_000_000_000), // 5.00 ETH — Enterprise
 ];
 
+
+sol! {
+    #[sol(rpc)]
+    interface IOperatorNFT {
+        function mint(address to, uint8 tier, bool soulbound) external;
+    }
+}
+
+
 #[derive(Clone)]
 pub struct GauntletConfig {
     pub challenge_ttl_secs: u64,
@@ -39,6 +53,8 @@ pub struct GauntletConfig {
     pub telegram_bot_token: Option<String>,
     pub telegram_ops_chat_id: Option<i64>,
     pub genesis_mode: bool,
+    pub operator_nft_address: Option<Address>,
+    pub relayer_private_key: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -573,27 +589,103 @@ async fn post_submit(
             tier: session.tier,
         },
     );
+    // Auto-mint OperatorNFT
+    let mut mint_status = String::from("pending_manual");
+    let mut mint_tx_hash = String::new();
+
+    if let (Some(nft_addr), Some(relayer_key)) = (
+        state.config.operator_nft_address,
+        &state.config.relayer_private_key,
+    ) {
+        match auto_mint_nft(
+            &state.config.base_rpc_http,
+            relayer_key,
+            nft_addr,
+            wallet,
+            session.tier,
+        ).await {
+            Ok(tx_hash) => {
+                mint_status = "minted".into();
+                mint_tx_hash = format!("{tx_hash:#x}");
+                info!("Gauntlet: auto-minted NFT for {wallet}, tx: {mint_tx_hash}");
+            }
+            Err(e) => {
+                mint_status = format!("auto_mint_failed: {e}");
+                warn!("Gauntlet: auto-mint failed for {wallet}: {e}");
+            }
+        }
+    } else {
+        info!("Gauntlet: auto-mint not configured, manual mint required for {wallet}");
+    }
+
     if let (Some(token), Some(chat_id)) = (
         &state.config.telegram_bot_token,
         state.config.telegram_ops_chat_id,
     ) {
         let tier_label = tier_name(session.tier);
+        let mint_info = if mint_tx_hash.is_empty() {
+            format!("<b>Mint:</b> manual required\n<code>/mint {wallet} {}</code>", session.tier)
+        } else {
+            format!("<b>Mint:</b> ✅ auto-minted\nTx: <code>{mint_tx_hash}</code>")
+        };
         let msg = format!(
-            "✅ <b>Gauntlet PASS</b>\n\nWallet: <code>{wallet}</code>\nTier: {tier_label} ({})\nTx: <code>{tx_hash}</code>\nTime: {}\n\n<b>Mint action:</b>\n<code>/mint {wallet} {}</code>",
+            "✅ <b>Gauntlet PASS</b>\n\nWallet: <code>{wallet}</code>\nTier: {tier_label} ({})\nPayment tx: <code>{tx_hash}</code>\nTime: {}\n\n{mint_info}",
             format!("{:.2} ETH", session.mint_cost_wei as f64 / 1e18),
             chrono::Utc::now().format("%Y-%m-%d %H:%M UTC"),
-            session.tier,
         );
         crate::telegram::notify_ops(token, chat_id, &msg).await;
     }
     state.remove_session(&session_id);
     info!("Gauntlet: PASS for {wallet}");
+
+    let next_steps = if !mint_tx_hash.is_empty() {
+        format!("Gauntlet passed. OperatorNFT minted: {mint_tx_hash}. Your seat is now active.")
+    } else {
+        "Gauntlet passed. Your wallet has been recorded. The Nopipe team will mint your OperatorNFT within 24 hours.".into()
+    };
+
     Json(DecisionResponse {
         decision: "Pass".into(),
         reason: "All steps validated".into(),
-        next_steps: "Gauntlet passed. Your wallet has been recorded. The Nopipe team will mint your OperatorNFT and reach out via @NoPipeBot on Telegram within 24 hours.".into(),
+        next_steps,
     })
     .into_response()
+}
+
+
+/// Attempt to auto-mint OperatorNFT on-chain after gauntlet PASS.
+/// Returns Ok(tx_hash) on success, Err(reason) on failure.
+async fn auto_mint_nft(
+    rpc_url: &str,
+    relayer_key: &str,
+    nft_address: Address,
+    wallet: Address,
+    tier: u8,
+) -> Result<B256, String> {
+    let signer: PrivateKeySigner = relayer_key
+        .parse()
+        .map_err(|e| format!("Invalid relayer key: {e}"))?;
+
+    let eth_wallet = EthereumWallet::from(signer);
+
+    let provider = ProviderBuilder::new()
+        .wallet(eth_wallet)
+        .connect_http(rpc_url.parse().map_err(|e| format!("Invalid RPC URL: {e}"))?);
+
+    let contract = IOperatorNFT::new(nft_address, provider);
+
+    let tx = contract
+        .mint(wallet, tier, true)
+        .send()
+        .await
+        .map_err(|e| format!("Mint tx failed: {e}"))?;
+
+    let receipt = tx
+        .get_receipt()
+        .await
+        .map_err(|e| format!("Mint receipt failed: {e}"))?;
+
+    Ok(receipt.transaction_hash)
 }
 
 impl GauntletState {

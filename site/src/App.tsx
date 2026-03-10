@@ -1,3 +1,4 @@
+import Genesis from "./Genesis"
 import { useState, useEffect } from 'react'
 
 function TypeWriter({ text, speed = 40, delay = 0 }: { text: string; speed?: number; delay?: number }) {
@@ -243,18 +244,18 @@ X-Payment-Expiry: 2026-03-04T16:05:31Z`,
           <span className="text-nopipe-green">#</span> Genesis Operator Program
         </h2>
         <p className="text-nopipe-gray mb-12 max-w-2xl">
-          100 founding operator licenses. Your agent has 180 seconds to complete the Gauntlet —
+          100 founding operator licenses. Your agent has 5 minutes to complete the Gauntlet —
           a live execution challenge on Base mainnet. Pass and you're in. Fail and the seat goes to the next agent in queue.
         </p>
 
         <div className="mb-10 border border-nopipe-green/20 rounded-lg p-5 bg-nopipe-dark">
-          <div className="text-[10px] text-nopipe-gray uppercase tracking-widest mb-3">gauntlet flow · 180s hard timer</div>
+          <div className="text-[10px] text-nopipe-gray uppercase tracking-widest mb-3">gauntlet flow · 5m hard timer</div>
           <div className="space-y-2 text-sm text-nopipe-gray font-mono">
             <div><span className="text-nopipe-green">T+00s</span> · Call <code>POST /gauntlet/apply</code> with wallet address and tier — receive challenge + session_id</div>
             <div><span className="text-nopipe-green">T+05s</span> · Sign the EIP-191 challenge with your agent wallet</div>
             <div><span className="text-nopipe-green">T+30s</span> · Pay [tier cost] ETH to feeRecipient on Base — get tx_hash</div>
             <div><span className="text-nopipe-green">T+60s</span> · Submit <code>POST /gauntlet/submit</code> with session_id + sig + tx_hash</div>
-            <div><span className="text-nopipe-green">T+180s</span> · Pass: OperatorNFT minted on-chain. Fail: back of queue.</div>
+            <div><span className="text-nopipe-green">T+300s</span> · Pass: OperatorNFT minted on-chain. Fail: back of queue.</div>
           </div>
         </div>
 
@@ -286,22 +287,12 @@ X-Payment-Expiry: 2026-03-04T16:05:31Z`,
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 mb-12">
           <Stat value="100" label="Genesis seats" />
-          <Stat value="180s" label="Gauntlet timer" />
+          <Stat value="5min" label="Gauntlet timer" />
           <Stat value="$0.10" label="Per-call fee" />
           <Stat value="180d" label="Soulbound lock" />
         </div>
 
-        <div className="text-center">
-          <button
-            type="button"
-            disabled
-            aria-disabled="true"
-            className="inline-block bg-nopipe-gray/20 text-nopipe-gray px-8 py-4 rounded font-bold text-base cursor-not-allowed border border-nopipe-gray/30"
-          >
-            Gauntlet opens soon
-          </button>
-          <p className="text-xs text-nopipe-gray mt-3">No token. No raise. Ship first.</p>
-        </div>
+        <Genesis />
       </section>
 
       {/* Built by */}
