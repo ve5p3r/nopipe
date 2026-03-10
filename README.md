@@ -1,43 +1,55 @@
 # NoPipe
 
-Swap execution infrastructure for autonomous AI agents on Base.
+Trustless RPC infrastructure for AI agents on Base.
 
-## What it does
+## Problem
 
-An AI agent calls the cluster RPC endpoint to execute token swaps. Access is gated by an OperatorNFT. The agent pays a subscription fee autonomously — no human required.
+AI agents running on consumer hardware get walled out of onchain execution by $500/mo RPC pricing. NoPipe provides non-custodial swap execution — the agent signs intent, the network settles.
 
-## Structure
+## Architecture
 
-| Directory | What |
-|-----------|------|
-| `cluster/` | Rust binary — JSON-RPC server, NFT gate, swap relay |
-| `contracts/` | Solidity — SwapExecutor, SubscriptionKeeper, OperatorNFT |
-| `docs/` | Strategy, PRDs, pitch |
-| `context/` | Session notes and decision log |
+| Component | Description |
+|-----------|-------------|
+| **Cluster** | Rust JSON-RPC server — auth, NFT gating, OFAC screening, swap relay |
+| **OperatorNFT** | Soulbound access control — 100 genesis seats (45 Operator / 35 Pro / 20 Enterprise) |
+| **SwapExecutor** | Non-custodial swap routing (Aerodrome, Uniswap V2/V3) |
+| **SubscriptionKeeper** | USDC-based subscription management |
 
-## Run
+## Contracts (Base Mainnet)
+
+| Contract | Address |
+|----------|---------|
+| OperatorNFT | [`0x5910664eD98f126839CE5093f10c70f8B77b05e8`](https://basescan.org/address/0x5910664eD98f126839CE5093f10c70f8B77b05e8) |
+| SwapExecutor | [`0xf7d1983642FEa96349c0505e101f931e56ADaa13`](https://basescan.org/address/0xf7d1983642FEa96349c0505e101f931e56ADaa13) |
+| SubscriptionKeeper | [`0xE53c3C251bEe73f7729570eDCf618868f26E91BA`](https://basescan.org/address/0xE53c3C251bEe73f7729570eDCf618868f26E91BA) |
+
+## The Gauntlet
+
+Genesis access flow:
+1. Connect wallet + sign EIP-191 challenge
+2. Pay tier fee on Base (0.25 / 1 / 5 ETH)
+3. Pass OFAC screening
+4. OperatorNFT mints automatically → seat active
+
+## Quick Start
 
 ```bash
-# Contracts
+# Run contract tests
 cd contracts && npm install && npx hardhat test
 
-# Cluster
-BASE_RPC_HTTP=https://base-sepolia.infura.io/v3/KEY \
-BASE_RPC_WS=wss://base-sepolia.infura.io/ws/v3/KEY \
-SWAP_EXECUTOR=0x... \
-SUBSCRIPTION_KEEPER=0x... \
-OPERATOR_NFT=0x... \
-RELAYER_PRIVATE_KEY=0x... \
-FEE_RECIPIENT=0x... \
+# Run cluster
+cp cluster/.env.example cluster/.env
+# Edit cluster/.env with your keys
 cargo run --release -p nopipe-cluster
 ```
 
-## Status
+## Links
 
-Contracts: ✅ compile + 23/23 tests  
-Cluster: ✅ compiles clean  
-Deployed: ✅ Base Mainnet
+- **Site:** [nopipe.io](https://nopipe.io)
+- **API:** [api.nopipe.io/health](https://api.nopipe.io/health)
+- **Whitepaper:** [nopipe.io/whitepaper.pdf](https://nopipe.io/whitepaper.pdf)
+- **Agent Identity (EIP-8004):** [nopipe.io/agent.json](https://nopipe.io/agent.json)
 
-- OperatorNFT: `0x5910664eD98f126839CE5093f10c70f8B77b05e8`
-- SwapExecutor: `0xf7d1983642FEa96349c0505e101f931e56ADaa13`
-- SubscriptionKeeper: `0xE53c3C251bEe73f7729570eDCf618868f26E91BA`
+## License
+
+MIT
