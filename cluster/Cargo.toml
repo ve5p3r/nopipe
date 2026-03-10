@@ -1,5 +1,5 @@
 [package]
-name = "polyclaw-cluster"
+name = "nopipe-cluster"
 version = "0.1.0"
 edition = "2021"
 

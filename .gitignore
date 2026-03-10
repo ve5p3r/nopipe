@@ -7,3 +7,4 @@ cache/
 typechain-types/
 deployments/
 !deployments/.gitkeep
+contracts/.env
