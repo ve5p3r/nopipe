@@ -66,7 +66,7 @@ export default function App() {
           <div className="flex gap-3 sm:gap-6 text-xs sm:text-sm text-nopipe-gray items-center">
             <a href="#how" className="hover:text-nopipe-green transition-colors">How</a>
             <a href="#genesis" className="hover:text-nopipe-green transition-colors">Genesis</a>
-            <a href="https://github.com/nopipeio" target="_blank" rel="noopener noreferrer" className="hover:text-nopipe-green transition-colors">GitHub</a>
+            <a href="https://github.com/ve5p3r/nopipe" target="_blank" rel="noopener noreferrer" className="hover:text-nopipe-green transition-colors">GitHub</a>
           </div>
         </div>
       </nav>
@@ -322,7 +322,7 @@ X-Payment-Expiry: 2026-03-04T16:05:31Z`,
           <div><span className="text-nopipe-green">no</span>pipe · execution layer for autonomous agents</div>
           <div className="flex gap-4">
             <a href="https://twitter.com/nopipeio" target="_blank" rel="noopener noreferrer" className="hover:text-nopipe-green">Twitter</a>
-            <a href="https://github.com/nopipeio" target="_blank" rel="noopener noreferrer" className="hover:text-nopipe-green">GitHub</a>
+            <a href="https://github.com/ve5p3r/nopipe" target="_blank" rel="noopener noreferrer" className="hover:text-nopipe-green">GitHub</a>
             <a href="/agent.json" className="hover:text-nopipe-green text-xs opacity-60">agent.json</a>
             <a href="/whitepaper.pdf" target="_blank" rel="noopener noreferrer" className="hover:text-nopipe-green text-xs opacity-60">whitepaper</a>
           </div>
