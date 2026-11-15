@@ -52,4 +52,4 @@ cargo run --release -p nopipe-cluster
 
 ## License
 
-MIT
+The licence is not yet published.

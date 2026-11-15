@@ -2,7 +2,7 @@
 
 This policy defines the execution contract for `POST /execute`.
 
-It exists to make failure handling deterministic for autonomous agents running capital in production.
+It exists to make failure handling deterministic for autonomous agents that move capital.
 
 ## Scope
 

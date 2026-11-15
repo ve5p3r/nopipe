@@ -8,23 +8,21 @@
 
 Nopipe is a permissionless execution protocol for AI agents. It replaces API keys, billing dashboards, and trust assumptions with a single HTTP header: `X-402-Payment`. An agent pays per-call in ETH. The executor fills or doesn't. No accounts, no tokens, no custody.
 
-We built this because we needed it. Our own agents — the ZeroClaw fleet — have been running capital on-chain since February 2026. Every design decision in Nopipe comes from operating those agents in production, not from a spec written in a vacuum.
+Status: the `X-402-Payment` header flow described here is the design. The Rust server in this repository does not yet handle HTTP 402; execution today goes through the signed JSON-RPC `swap_execute` method.
+
+We built this because we needed it.
 
 This document describes what Nopipe is, how it works, what we've shipped, and where it goes next.
 
 ---
 
-## We Were Early
+## Background
 
 The thread matters because it explains why the protocol looks the way it does.
 
-**ERC-8004 #24720.** We registered Nopipe as a formal EIP service type before anyone else was building x402 execution layers. The ERC-8004 registry is how agents discover services by capability, not by URL. Nopipe is in it.
+**ERC-8004 #24720.** We registered Nopipe as a formal EIP service type. The ERC-8004 registry is how agents discover services by capability, not by URL. Nopipe is in it.
 
-**x402 before anyone shipped it.** Coinbase published the x402 spec. We were already building against it. When their reference implementation landed, we had a working executor. Not a demo — a production relayer settling real swaps on Base.
-
-**ZeroClaw agents running capital since February 2026.** Not testnet. Not simulated. Real ETH, real swaps, real settlement. The Gauntlet challenge system, the subscription tiers, the latency numbers — all of this comes from operating agents that move money.
-
-This isn't a lab project. It's infrastructure we run.
+**x402.** Coinbase published the x402 spec on 2025-05-06. This repository's first commit is 2026-03-01, after that spec and after Stripe's x402 preview (2026-02-10).
 
 ---
 
@@ -108,7 +106,7 @@ Nopipe is a 14-component stack. Not a smart contract with a landing page — a f
 | `main` | Entrypoint, config, lifecycle management |
 | `gauntlet` | Gauntlet challenge orchestration — timing, validation, scoring, and SQLite-backed session persistence |
 | `relayer` | Transaction relay and MEV-aware submission |
-| `rpc_server` | x402-compatible JSON-RPC endpoint for agent requests |
+| `rpc_server` | JSON-RPC endpoint for agent requests |
 | `nft_cache` | Local cache for OperatorNFT ownership and metadata lookups |
 | `keeper` | Chainlink Keeper integration for subscription lifecycle automation |
 | `security` | Signature validation, rate limiting, abuse detection |
@@ -222,12 +220,11 @@ What we won't do is build attestation-based reputation. Execution quality is mea
 
 ### Shipped (as of March 2026)
 
-- Full 14-component stack deployed and operational
+- 14-component stack in the repository (3 Solidity contracts, 7 Rust modules, 4 frontend and infra pieces)
 - SwapExecutor, SubscriptionKeeper, and OperatorNFT contracts live on Base
-- Rust execution cluster running in production
-- Gauntlet challenge system live with SQLite-persisted sessions and nonce state
+- Rust execution cluster in the repository
+- Gauntlet challenge system with SQLite-persisted sessions and nonce state
 - ERC-8004 service registration (#24720)
-- ZeroClaw agents operating on the protocol daily
 - Operator onboarding site with tier selection and Gauntlet UI
 - OFAC SDN screening at the Gauntlet mint gate (off-chain list checks, 24h refresh cadence)
 
