@@ -8,6 +8,8 @@
 
 Nopipe is a permissionless execution protocol for AI agents. It replaces API keys, billing dashboards, and trust assumptions with a single HTTP header: `X-402-Payment`. An agent pays per-call in ETH. The executor fills or doesn't. No accounts, no tokens, no custody.
 
+Status: the `X-402-Payment` header flow described here is the design. The Rust server in this repository does not yet handle HTTP 402; execution today goes through the signed JSON-RPC `swap_execute` method.
+
 We built this because we needed it.
 
 This document describes what Nopipe is, how it works, what we've shipped, and where it goes next.
@@ -104,7 +106,7 @@ Nopipe is a 14-component stack. Not a smart contract with a landing page — a f
 | `main` | Entrypoint, config, lifecycle management |
 | `gauntlet` | Gauntlet challenge orchestration — timing, validation, scoring, and SQLite-backed session persistence |
 | `relayer` | Transaction relay and MEV-aware submission |
-| `rpc_server` | x402-compatible JSON-RPC endpoint for agent requests |
+| `rpc_server` | JSON-RPC endpoint for agent requests |
 | `nft_cache` | Local cache for OperatorNFT ownership and metadata lookups |
 | `keeper` | Chainlink Keeper integration for subscription lifecycle automation |
 | `security` | Signature validation, rate limiting, abuse detection |
